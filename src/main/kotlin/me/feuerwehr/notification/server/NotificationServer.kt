@@ -7,9 +7,12 @@ import io.ktor.auth.*
 import io.ktor.html.insert
 import io.ktor.html.respondHtml
 import io.ktor.http.CookieEncoding
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.resource
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
+import io.ktor.request.host
+import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.response.respondRedirect
 import io.ktor.routing.*
@@ -23,6 +26,11 @@ import kotlinx.html.body
 import kotlinx.html.head
 import me.feuerwehr.notification.server.html.DefaultPageHead
 import me.feuerwehr.notification.server.html.LoginBoxPage
+import me.feuerwehr.notification.server.web.json.rest.LoginRequestJSON
+import me.feuerwehr.notification.server.web.json.rest.LoginResponseJSON
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 import java.util.*
 
@@ -35,6 +43,7 @@ fun main() {
         module {
             main()
             loginPage()
+            api()
         }
     }
     val server = embeddedServer(Netty, webconfig)
@@ -81,6 +90,50 @@ fun Application.loginPage(){
             }
         }
     }
+}
+fun Application.api () {
+    routing() {
+        route("api") {
+            apiinternal()
+        }
+    }
+}
+fun Route.apiinternal(){
+    route("internal"){
+        post ("login"){
+            runCatching {
+                if (true) {
+                    call.respond(HttpStatusCode.BadRequest, "you already logged in")
+                } else {
+                    val request = call.receive(LoginRequestJSON::class)
+                    val user = transaction(DbSettings.db) {
+                        WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
+                    }
+                    if (user != null && user.hasPassword(request.password)) {
+                        call.sessions.set(LoginSession())
+                        call.respond(
+                            LoginResponseJSON(
+                                true
+                            )
+                        )
+                    } else {
+                        call.respond(
+                            LoginResponseJSON(
+                                false
+                            )
+                        )
+                    }
+                }
+            }.getOrElse {
+                call.respond(HttpStatusCode.InternalServerError)
+            }
+        }
+        }
+    }
+}
+object DbSettings {
+    val db = Database.connect("jdbc:mysql://localhost:3306/test", driver = "com.mysql.jdbc.Driver",
+    user = "root", password = "your_pwd")
 }
 data class LoginSession(val userID : UUID){
 

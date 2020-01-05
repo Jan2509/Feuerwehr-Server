@@ -18,6 +18,10 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:$ktor_version")
     implementation("io.ktor:ktor-auth:$ktor_version")
     implementation("io.ktor:ktor-html-builder:$ktor_version")
+    compile("org.jetbrains.exposed", "exposed-core", "0.20.1")
+    compile("org.jetbrains.exposed", "exposed-dao", "0.20.1")
+    compile("org.jetbrains.exposed", "exposed-jdbc", "0.20.1")
+    compile("mysql:mysql-connector-java:5.1.46")
 }
 
 configure<JavaPluginConvention> {
