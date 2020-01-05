@@ -22,6 +22,7 @@ dependencies {
     compile("org.jetbrains.exposed", "exposed-dao", "0.20.1")
     compile("org.jetbrains.exposed", "exposed-jdbc", "0.20.1")
     compile("mysql:mysql-connector-java:5.1.46")
+    compile("com.google.guava", "guava", "18.0")
 }
 
 configure<JavaPluginConvention> {

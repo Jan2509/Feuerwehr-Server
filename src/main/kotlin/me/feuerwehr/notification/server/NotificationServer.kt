@@ -6,17 +6,13 @@ import io.ktor.application.install
 import io.ktor.auth.*
 import io.ktor.html.insert
 import io.ktor.html.respondHtml
-import io.ktor.http.CookieEncoding
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.content.resource
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
-import io.ktor.request.host
 import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.response.respondRedirect
 import io.ktor.routing.*
-import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.applicationEngineEnvironment
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
@@ -24,14 +20,14 @@ import io.ktor.server.netty.Netty
 import io.ktor.sessions.*
 import kotlinx.html.body
 import kotlinx.html.head
+import me.feuerwehr.notification.server.database.dao.WebUserDAO
+import me.feuerwehr.notification.server.database.table.WebUserTable
 import me.feuerwehr.notification.server.html.DefaultPageHead
 import me.feuerwehr.notification.server.html.LoginBoxPage
-import me.feuerwehr.notification.server.web.json.rest.LoginRequestJSON
+import me.feuerwehr.notification.server.web.json.rest.LoginRequestingJSON
 import me.feuerwehr.notification.server.web.json.rest.LoginResponseJSON
 import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.io.File
 import java.util.*
 
 fun main() {
@@ -105,12 +101,12 @@ fun Route.apiinternal(){
                 if (true) {
                     call.respond(HttpStatusCode.BadRequest, "you already logged in")
                 } else {
-                    val request = call.receive(LoginRequestJSON::class)
+                    val request = call.receive(LoginRequestingJSON::class)
                     val user = transaction(DbSettings.db) {
                         WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
                     }
                     if (user != null && user.hasPassword(request.password)) {
-                        call.sessions.set(LoginSession())
+                        call.sessions.set(LoginSession(1))
                         call.respond(
                             LoginResponseJSON(
                                 true
@@ -128,16 +124,15 @@ fun Route.apiinternal(){
                 call.respond(HttpStatusCode.InternalServerError)
             }
         }
-        }
     }
 }
 object DbSettings {
     val db = Database.connect("jdbc:mysql://localhost:3306/test", driver = "com.mysql.jdbc.Driver",
     user = "root", password = "your_pwd")
 }
-data class LoginSession(val userID : UUID){
+data class LoginSession(val userID : Int){
 
 }
-fun getUserbyUUID (userid : UUID): Principal? {
+fun getUserbyUUID (userid : Int): Principal? {
     return UserIdPrincipal(userid.toString())
 }
