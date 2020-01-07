@@ -1,4 +1,4 @@
-package me.feuerwehr.notification.server.html
+package me.feuerwehr.notification.server.web.components.html
 
 import io.ktor.html.Template
 import kotlinx.html.*

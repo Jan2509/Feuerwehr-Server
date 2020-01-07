@@ -1,11 +1,14 @@
 package me.feuerwehr.notification.server
 
+import com.google.common.cache.CacheBuilder
+import com.google.common.cache.CacheLoader
 import io.ktor.application.Application
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.auth.*
 import io.ktor.html.insert
 import io.ktor.html.respondHtml
+import io.ktor.http.CookieEncoding
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
@@ -20,119 +23,268 @@ import io.ktor.server.netty.Netty
 import io.ktor.sessions.*
 import kotlinx.html.body
 import kotlinx.html.head
+import me.feuerwehr.notification.server.web.WebConfigSpec
+import me.feuerwehr.notification.server.web.user.WebUserSession
 import me.feuerwehr.notification.server.database.dao.WebUserDAO
 import me.feuerwehr.notification.server.database.table.WebUserTable
-import me.feuerwehr.notification.server.html.DefaultPageHead
-import me.feuerwehr.notification.server.html.LoginBoxPage
-import me.feuerwehr.notification.server.web.json.rest.LoginRequestingJSON
-import me.feuerwehr.notification.server.web.json.rest.LoginResponseJSON
+import me.feuerwehr.notification.server.web.components.html.DefaultPageHead
+import me.feuerwehr.notification.server.web.components.html.LoginBoxPage
+import me.feuerwehr.notification.server.web.components.json.rest.LoginRequestingJSON
+import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.util.*
+import com.uchuhimo.konf.Config
+import io.ktor.application.ApplicationCall
+import io.ktor.features.CachingHeaders
+import io.ktor.html.respondHtmlTemplate
+import io.ktor.http.CacheControl
+import io.ktor.http.ContentType
+import io.ktor.http.cio.websocket.pingPeriod
+import io.ktor.http.cio.websocket.timeout
+import io.ktor.http.content.CachingOptions
+import io.ktor.request.host
+import io.ktor.util.pipeline.PipelineContext
+import io.ktor.websocket.WebSockets
+import io.ktor.websocket.webSocket
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.html.unsafe
+import me.feuerwehr.notification.server.api.Loader
+import me.feuerwehr.notification.server.web.components.html.FillerContainer
+import me.feuerwehr.notification.server.web.components.html.OuterPage
+import me.feuerwehr.notification.server.web.components.json.EmptyJSON
+import me.feuerwehr.notification.server.web.components.json.MessageJSON
+import org.apache.commons.lang3.RandomStringUtils
+import org.commonmark.parser.Parser
+import org.commonmark.renderer.html.HtmlRenderer
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.slf4j.LoggerFactory
+import java.io.File
+import java.time.Duration
+import javax.inject.Inject
+import javax.inject.Singleton
 
-fun main() {
-    val webconfig = applicationEngineEnvironment {
-        connector {
-            host = "127.0.0.1"
-            port = 8080
-        }
-        module {
-            main()
-            loginPage()
-            api()
-        }
-    }
-    val server = embeddedServer(Netty, webconfig)
-    server.start(wait = true)
-}
 
-fun Application.main() {
-    routing {
-        static("assets") {
-            resources("/web/assets")
-            //resource("favicon.ico", "/web/assets/meta/favicon.ico")
+@Singleton
+class NotificationServer @Inject constructor(
+    private val config: Config,
+    private val database: Database = DbSettings.db,
+    private val coroutine: CoroutineDispatcher
+    ) : Loader {
+    private val mdParser = Parser.builder().build()
+    private val htmlRenderer = HtmlRenderer.builder()
+        .build()
+    private val userPrincipalCache = CacheBuilder.newBuilder()
+        .weakValues()
+        .build<WebUserSession, UserPrincipal?>(object : CacheLoader<WebUserSession, UserPrincipal?>() {
+            override fun load(key: WebUserSession) =
+                when (val user = transaction(database) { WebUserDAO.findById(key.userID) }) {
+                    null -> null
+                    else -> UserPrincipal(key.userID, user)
+                }
+        })
+    override suspend fun enable() {
+        initDatabase()
+
+        val sessionStorageString = config[WebConfigSpec.Session.SESSION_STORAGE]
+        val sessionStorage = when {
+            sessionStorageString.isBlank() -> SessionStorageMemory()
+            else -> directorySessionStorage(File(sessionStorageString),true)
         }
-    }
-    install(Sessions) {
-        cookie<LoginSession>(
-            "FeuerwehrWebLoginSession", SessionStorageMemory()
-        ) {
-            cookie.path = "/"
-        }
-    }
-    install(Authentication) {
-        session<LoginSession> {
-            challenge("/login")
-            validate { session -> getUserbyUUID(session.userID) }
-        }
-    }
-}
-fun Application.loginPage(){
-    routing {
-        get ("/login"){
-            if (call.authentication.principal != null)
-            {
-                call.respondRedirect("/", false)
+        val webconfig = applicationEngineEnvironment {
+            connector {
+                host = "127.0.0.1"
+                port = 8080
             }
-            else {
-                call.respondHtml{
-                    head {
-                        insert(DefaultPageHead) {}
+            parentCoroutineContext = coroutine
+            module {
+                main(sessionStorage)
+                loginPage()
+                mainPages()
+                api()
+            }
+        }
+        val server = embeddedServer(Netty, webconfig)
+        server.start(wait = true)
+    }
+
+    fun Application.main(sessionStorage: SessionStorage) {
+        routing {
+            static("assets") {
+                resources("/web/assets")
+                //resource("favicon.ico", "/web/assets/meta/favicon.ico")
+            }
+        }
+        install(CachingHeaders) {
+            options { outgoingContent ->
+                when (outgoingContent.contentType?.withoutParameters()) {
+                    ContentType.Text.CSS -> CachingOptions(
+                        CacheControl.MaxAge(
+                            maxAgeSeconds = 24 * 60 * 60,
+                            mustRevalidate = true
+                        )
+                    )
+                    ContentType.Application.JavaScript -> CachingOptions(
+                        CacheControl.MaxAge(
+                            maxAgeSeconds = 24 * 60 * 60,
+                            mustRevalidate = true
+                        )
+                    )
+                    ContentType.Image.Any -> CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 24 * 60 * 60))
+                    else -> null
+                }
+            }
+        }
+        install(WebSockets) {
+            pingPeriod = Duration.ofSeconds(10)
+            timeout = Duration.ofSeconds(30)
+        }
+        install(Sessions) {
+            cookie<WebUserSession>(
+                config[WebConfigSpec.Session.COOKIE_NAME],
+                sessionStorage
+            ) {
+                cookie.path = "/"
+                cookie.encoding = CookieEncoding.URI_ENCODING
+                cookie.maxAgeInSeconds = config[WebConfigSpec.Session.LIFETIME].toLong()
+                this.identity { RandomStringUtils.randomAlphabetic(64) }
+            }
+        }
+        install(Authentication) {
+            this.session<WebUserSession>("Feuerwehr-Login") {
+                challenge("/login")
+                validate { call -> userPrincipalCache[call] }
+            }
+
+        }
+    }
+    private fun Application.mainPages() {
+        routing {
+            authenticate("Feuerwehr-Login") {
+                get("/") {
+                    call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
+
+                        content {
+                            insert(FillerContainer) {
+
+                            }
+                        }
                     }
-                    body {
-                        insert(LoginBoxPage) {}
+                }
+
+                get("/about") {
+                    call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
+                        val doc =
+                            mdParser.parseReader(java.io.InputStreamReader(this::class.java.getResourceAsStream("/web/md/about.md")))
+                        content {
+                            unsafe {
+                                +htmlRenderer.render(doc)
+                            }
+                        }
                     }
                 }
             }
         }
     }
-}
-fun Application.api () {
-    routing() {
-        route("api") {
-            apiinternal()
-        }
-    }
-}
-fun Route.apiinternal(){
-    route("internal"){
-        post ("login"){
-            runCatching {
-                if (true) {
-                    call.respond(HttpStatusCode.BadRequest, "you already logged in")
+
+    fun Application.loginPage() {
+        routing {
+            get("/login") {
+                if (call.authentication.principal != null) {
+                    call.respondRedirect("/", false)
                 } else {
-                    val request = call.receive(LoginRequestingJSON::class)
-                    val user = transaction(DbSettings.db) {
-                        WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
-                    }
-                    if (user != null && user.hasPassword(request.password)) {
-                        call.sessions.set(LoginSession(1))
-                        call.respond(
-                            LoginResponseJSON(
-                                true
-                            )
-                        )
-                    } else {
-                        call.respond(
-                            LoginResponseJSON(
-                                false
-                            )
-                        )
+                    call.respondHtml {
+                        head {
+                            insert(DefaultPageHead) {}
+                        }
+                        body {
+                            insert(LoginBoxPage) {}
+                        }
                     }
                 }
-            }.getOrElse {
-                call.respond(HttpStatusCode.InternalServerError)
             }
         }
+    }
+
+    fun Application.api() {
+        routing() {
+            route("api") {
+                apiInternal()
+            }
+        }
+    }
+
+    private fun Route.apiInternal() {
+        route("internal") {
+            post("login") {
+                //delay(Duration.ofSeconds(3))
+                runCatching {
+                    if (validSession()) {
+                        call.respond(HttpStatusCode.BadRequest, "you already logged in")
+                    } else {
+                        val request = call.receive(LoginRequestingJSON::class)
+                        val user = transaction(database) {
+                            WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
+                        }
+                        if (user != null && user.hasPassword(request.password)) {
+                            call.sessions.set(WebUserSession(user.id.value, null))
+                            call.respond(
+                                LoginResponseJSON(
+                                    true
+                                )
+                            )
+                        } else {
+                            call.respond(
+                                LoginResponseJSON(
+                                    false
+                                )
+                            )
+                        }
+                    }
+                }.getOrElse {
+                    call.respond(HttpStatusCode.InternalServerError)
+                }
+            }
+            authenticate("Feuerwehr-Login") {
+                get("logout") {
+
+                    call.sessions.clear<WebUserSession>()
+                    call.respond(MessageJSON("logged out"))
+                }
+                get("sessionInfo") {
+                    val session = call.sessions.get<WebUserSession>()
+                    call.respond(session ?: EmptyJSON)
+                }
+                webSocket {
+                    val webUserSession = call.sessions.get<WebUserSession>() ?: run {
+
+                        return@webSocket
+                    }
+
+                }
+            }
+
+        }
+    }
+    private fun initDatabase() = transaction(database) {
+        SchemaUtils.createMissingTablesAndColumns(WebUserTable)
+    }
+    private fun PipelineContext<*, ApplicationCall>.validSession() = runCatching {
+        val session = call.sessions.get<WebUserSession>()
+        return@runCatching session != null && transaction(database) { WebUserDAO.findById(session.userID) != null }
+    }.getOrElse {
+        false
     }
 }
 object DbSettings {
     val db = Database.connect("jdbc:mysql://localhost:3306/test", driver = "com.mysql.jdbc.Driver",
     user = "root", password = "your_pwd")
 }
-data class LoginSession(val userID : Int){
+private data class UserPrincipal(val id: Int, val user: WebUserDAO) : Principal {
+    companion object Static {
+        private val logger = LoggerFactory.getLogger(UserPrincipal::class.java)
+    }
 
-}
-fun getUserbyUUID (userid : Int): Principal? {
-    return UserIdPrincipal(userid.toString())
+    init {
+        logger.debug("Init (id=$id user=${user.username})")
+    }
 }

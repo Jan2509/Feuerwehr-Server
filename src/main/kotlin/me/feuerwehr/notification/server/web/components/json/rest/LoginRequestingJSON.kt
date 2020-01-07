@@ -1,4 +1,4 @@
-package me.feuerwehr.notification.server.web.json.rest
+package me.feuerwehr.notification.server.web.components.json.rest
 
 data class LoginRequestingJSON(
     val username: String,
