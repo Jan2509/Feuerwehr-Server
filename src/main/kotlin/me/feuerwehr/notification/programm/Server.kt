@@ -13,8 +13,10 @@ import javax.inject.Inject
 )
 
 class Server  : Runnable {
-    @Inject
-    lateinit var server : NotificationServer
+    @CommandLine.Option(
+        names = ["--local", "-h2"]
+    )
+    val server = NotificationServer()
     override fun run(){
         try{
             server.enable()
@@ -28,6 +30,8 @@ class Server  : Runnable {
     companion object {
         @JvmStatic
         fun main(args: Array<String>) {
+            val commandLine = CommandLine(Server::class.java)
+            commandLine.execute(*args)
         }
     }
 }

@@ -39,6 +39,8 @@ dependencies {
     compile("com.coreoz", "wisp", "2.1.0")
     compile("info.picocli", "picocli", "4.+")
     compile("org.fusesource.jansi","jansi","1.18")
+    compile("org.slf4j", "slf4j-simple", "1.7.30")
+
 }
 
 configure<JavaPluginConvention> {

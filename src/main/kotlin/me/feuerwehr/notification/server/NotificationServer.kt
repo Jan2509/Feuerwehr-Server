@@ -23,7 +23,6 @@ import io.ktor.server.netty.Netty
 import io.ktor.sessions.*
 import kotlinx.html.body
 import kotlinx.html.head
-import me.feuerwehr.notification.server.web.WebConfigSpec
 import me.feuerwehr.notification.server.web.user.WebUserSession
 import me.feuerwehr.notification.server.database.dao.WebUserDAO
 import me.feuerwehr.notification.server.database.table.WebUserTable
@@ -57,18 +56,16 @@ import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.selectAll
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.time.Duration
-import javax.inject.Inject
 import javax.inject.Singleton
 
 
 @Singleton
-class NotificationServer @Inject constructor(
-    private val config: Config,
-    private val database: Database = DbSettings.db,
-    private val coroutine: CoroutineDispatcher
+class NotificationServer constructor(
+    private val database: Database = DbSettings.db
     )  {
     private val mdParser = Parser.builder().build()
     private val htmlRenderer = HtmlRenderer.builder()
@@ -85,7 +82,7 @@ class NotificationServer @Inject constructor(
     fun enable() {
         initDatabase()
 
-        val sessionStorageString = config[WebConfigSpec.Session.SESSION_STORAGE]
+        val sessionStorageString = ""
         val sessionStorage = when {
             sessionStorageString.isBlank() -> SessionStorageMemory()
             else -> directorySessionStorage(File(sessionStorageString),true)
@@ -95,7 +92,6 @@ class NotificationServer @Inject constructor(
                 host = "127.0.0.1"
                 port = 8080
             }
-            parentCoroutineContext = coroutine
             module {
                 main(sessionStorage)
                 loginPage()
@@ -140,12 +136,12 @@ class NotificationServer @Inject constructor(
         }
         install(Sessions) {
             cookie<WebUserSession>(
-                config[WebConfigSpec.Session.COOKIE_NAME],
+                "Feuerwehr-Login",
                 sessionStorage
             ) {
                 cookie.path = "/"
                 cookie.encoding = CookieEncoding.URI_ENCODING
-                cookie.maxAgeInSeconds = config[WebConfigSpec.Session.LIFETIME].toLong()
+                cookie.maxAgeInSeconds = 14 * 24 * 60 * 60
                 this.identity { RandomStringUtils.randomAlphabetic(64) }
             }
         }
@@ -267,6 +263,15 @@ class NotificationServer @Inject constructor(
     }
     private fun initDatabase() = transaction(database) {
         SchemaUtils.createMissingTablesAndColumns(WebUserTable)
+        if (!WebUserTable.selectAll().any()) {
+            val password = RandomStringUtils.randomAlphabetic(8)
+            val user = "admin"
+            WebUserDAO.new {
+                username = user
+                setPassword(password)
+            }
+            println("Das ist dein "+ user +" Passwort: " + password)
+        }
     }
     private fun PipelineContext<*, ApplicationCall>.validSession() = runCatching {
         val session = call.sessions.get<WebUserSession>()
