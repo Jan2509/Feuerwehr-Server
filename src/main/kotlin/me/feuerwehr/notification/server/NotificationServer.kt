@@ -69,7 +69,7 @@ class NotificationServer @Inject constructor(
     private val config: Config,
     private val database: Database = DbSettings.db,
     private val coroutine: CoroutineDispatcher
-    ) : Loader {
+    )  {
     private val mdParser = Parser.builder().build()
     private val htmlRenderer = HtmlRenderer.builder()
         .build()
@@ -82,7 +82,7 @@ class NotificationServer @Inject constructor(
                     else -> UserPrincipal(key.userID, user)
                 }
         })
-    override suspend fun enable() {
+    fun enable() {
         initDatabase()
 
         val sessionStorageString = config[WebConfigSpec.Session.SESSION_STORAGE]

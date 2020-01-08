@@ -1,0 +1,33 @@
+package me.feuerwehr.notification.programm
+
+
+import org.fusesource.jansi.AnsiConsole
+import me.feuerwehr.notification.server.NotificationServer
+import picocli.CommandLine
+import javax.inject.Inject
+
+@CommandLine.Command(
+    name = "FFServer.jar",
+    subcommands = [
+    ]
+)
+
+class Server  : Runnable {
+    @Inject
+    lateinit var server : NotificationServer
+    override fun run(){
+        try{
+            server.enable()
+        } catch (e:Exception) {
+            e.printStackTrace()
+        }
+        while(true) {
+            Thread.sleep(Long.MAX_VALUE)
+        }
+    }
+    companion object {
+        @JvmStatic
+        fun main(args: Array<String>) {
+        }
+    }
+}

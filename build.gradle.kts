@@ -1,6 +1,11 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.github.jengelman.gradle.plugins.shadow.tasks.ConfigureShadowRelocation
+
 plugins {
     java
     kotlin("jvm") version "1.3.61"
+    id("com.github.johnrengelman.shadow") version "5.2.0"
 }
 
 group = "me.feuerwehr"
@@ -32,16 +37,31 @@ dependencies {
     compile("javax.inject","javax.inject","1")
     compile("com.atlassian.commonmark", "commonmark", "0.13.0")
     compile("com.coreoz", "wisp", "2.1.0")
+    compile("info.picocli", "picocli", "4.+")
+    compile("org.fusesource.jansi","jansi","1.18")
 }
 
 configure<JavaPluginConvention> {
     sourceCompatibility = JavaVersion.VERSION_1_8
 }
-tasks {
-    compileKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+tasks.withType<KotlinCompile> {
+    kotlinOptions.jvmTarget = "1.8"
+}
+val mainClassPath = "me.feuerwehr.notification.programm.Server"
+tasks.withType<Jar> {
+
+    manifest {
+        attributes(
+            mapOf(
+                "Main-Class" to mainClassPath
+            )
+        )
     }
-    compileTestKotlin {
-        kotlinOptions.jvmTarget = "1.8"
-    }
+}
+tasks.withType<ShadowJar> {
+    baseName = "FFServer"
+    classifier = null
+    version = null
+    // minimize{ exclude("com.fasterxml.jackson.*:.*:.*", "org.jetbrains.kotlin:kotlin-reflect:.*") }
+
 }
