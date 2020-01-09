@@ -25,6 +25,7 @@ dependencies {
     implementation("io.ktor:ktor-auth:$ktor_version")
     implementation("io.ktor:ktor-html-builder:$ktor_version")
     implementation("io.ktor:ktor-websockets:$ktor_version")
+    implementation("io.ktor:ktor-jackson:$ktor_version")
     compile("org.jetbrains.exposed", "exposed-core", "0.20.1")
     compile("org.jetbrains.exposed", "exposed-dao", "0.20.1")
     compile("org.jetbrains.exposed", "exposed-jdbc", "0.20.1")

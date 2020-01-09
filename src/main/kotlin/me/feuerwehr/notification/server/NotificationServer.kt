@@ -32,22 +32,19 @@ import me.feuerwehr.notification.server.web.components.json.rest.LoginRequesting
 import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
-import com.uchuhimo.konf.Config
 import io.ktor.application.ApplicationCall
-import io.ktor.features.CachingHeaders
+import io.ktor.features.*
 import io.ktor.html.respondHtmlTemplate
 import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.http.cio.websocket.pingPeriod
 import io.ktor.http.cio.websocket.timeout
 import io.ktor.http.content.CachingOptions
-import io.ktor.request.host
+import io.ktor.jackson.jackson
 import io.ktor.util.pipeline.PipelineContext
 import io.ktor.websocket.WebSockets
 import io.ktor.websocket.webSocket
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.html.unsafe
-import me.feuerwehr.notification.server.api.Loader
 import me.feuerwehr.notification.server.web.components.html.FillerContainer
 import me.feuerwehr.notification.server.web.components.html.OuterPage
 import me.feuerwehr.notification.server.web.components.json.EmptyJSON
@@ -133,6 +130,21 @@ class NotificationServer constructor(
         install(WebSockets) {
             pingPeriod = Duration.ofSeconds(10)
             timeout = Duration.ofSeconds(30)
+        }
+        install(Compression) {
+            gzip {
+                priority = 1.0
+            }
+            deflate {
+                priority = 10.0
+                minimumSize(1024) // condition
+            }
+        }
+
+        install(ContentNegotiation) {
+            jackson {
+
+            }
         }
         install(Sessions) {
             cookie<WebUserSession>(
@@ -221,8 +233,11 @@ class NotificationServer constructor(
                         val user = transaction(database) {
                             WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
                         }
+                        if (user != null) {
+                            println("[Info] Password" + user.hasPassword(request.password))
+                        }
                         if (user != null && user.hasPassword(request.password)) {
-                            call.sessions.set(WebUserSession(user.id.value, null))
+                            call.sessions.set(WebUserSession(user.id.value))
                             call.respond(
                                 LoginResponseJSON(
                                     true
@@ -270,7 +285,7 @@ class NotificationServer constructor(
                 username = user
                 setPassword(password)
             }
-            println("Das ist dein "+ user +" Passwort: " + password)
+            println("[Info] Das ist dein "+ user +" Passwort: " + password)
         }
     }
     private fun PipelineContext<*, ApplicationCall>.validSession() = runCatching {
@@ -282,7 +297,7 @@ class NotificationServer constructor(
 }
 object DbSettings {
     val db = Database.connect("jdbc:mysql://localhost:3306/test", driver = "com.mysql.jdbc.Driver",
-    user = "root", password = "your_pwd")
+    user = "root", password = "")
 }
 private data class UserPrincipal(val id: Int, val user: WebUserDAO) : Principal {
     companion object Static {

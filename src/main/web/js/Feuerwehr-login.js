@@ -1,6 +1,6 @@
 import $ from 'jquery'
 import Swal from "sweetalert2";
-import {LoginRequestJson} from "./json-components.js";
+import {LoginRequestingJson} from "./json-components.js";
 import 'particles.js';
 
 function startLogin() {
@@ -31,7 +31,7 @@ async function initParticles() {
 }
 
 function requestLogin(username, password, fields) {
-    /*Swal.fire({
+    Swal.fire({
         title: 'Please wait',
         showCancelButton: false,
         showCloseButton: false,
@@ -41,7 +41,7 @@ function requestLogin(username, password, fields) {
         onOpen: function () {
             Swal.showLoading();
         }
-    });*/
+    });
     disableLoginForm(fields);
 
 
@@ -52,7 +52,7 @@ function requestLogin(username, password, fields) {
         } else {
             console.warn(request.statusText, request.responseText);
             enableLoginForm(fields);
-            Swal.fire({
+            /*Swal.fire({
                 title: 'Oops something went wrong!',
                 icon: "warning",
                 confirmButtonText: 'Reload Page',
@@ -69,12 +69,12 @@ function requestLogin(username, password, fields) {
                     }
                     window.location.reload()
                 },
-            });
+            });*/
         }
     });
     request.open("POST", "/api/internal/login", true);
     request.setRequestHeader("Content-Type", "application/json");
-    request.send(JSON.stringify(new LoginRequestJson(username, password)))
+    request.send(JSON.stringify(new LoginRequestingJson(username, password)))
 }
 
 function handleLoginReponse(response, fields) {
