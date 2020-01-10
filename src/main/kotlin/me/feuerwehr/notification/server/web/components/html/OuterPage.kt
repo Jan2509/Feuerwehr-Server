@@ -19,7 +19,7 @@ class OuterPage() : Template<HTML> {
             main("container is-fluid") {
                 attributes["data-barba"] = "container"
                 div("notification") {
-                    +"Note"
+                    +"Einsatz Formular"
                 }
                 div() {
                     insert(content)
@@ -38,7 +38,7 @@ class OuterPage() : Template<HTML> {
 
             div("navbar-brand") {
                 div("navbar-item") {
-                    +"Orpheus"
+                    +"Feuerwehr Information Service"
                 }
 
                 a(classes = "navbar-burger burger") {

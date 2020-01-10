@@ -233,9 +233,6 @@ class NotificationServer constructor(
                         val user = transaction(database) {
                             WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
                         }
-                        if (user != null) {
-                            println("[Info] Password" + user.hasPassword(request.password))
-                        }
                         if (user != null && user.hasPassword(request.password)) {
                             call.sessions.set(WebUserSession(user.id.value))
                             call.respond(
