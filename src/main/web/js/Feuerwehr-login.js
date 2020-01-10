@@ -1,12 +1,8 @@
 import $ from 'jquery'
 import Swal from "sweetalert2";
-import {LoginRequestingJson} from "./json-components.js";
-import 'particles.js';
+import {LoginRequestJson} from "./json-components.js";
 
 function startLogin() {
-    initParticles().then(function () {
-        console.log("particles started")
-    });
 
     $('#login-form').submit(function (event) {
         event.preventDefault();
@@ -25,9 +21,7 @@ function startLogin() {
 }
 
 async function initParticles() {
-    particlesJS.load('login_body', '/assets/config/login-particlesjs-config.json', function () {
-        console.log('callback - particles.js config loaded');
-    });
+
 }
 
 function requestLogin(username, password, fields) {
@@ -52,7 +46,7 @@ function requestLogin(username, password, fields) {
         } else {
             console.warn(request.statusText, request.responseText);
             enableLoginForm(fields);
-            /*Swal.fire({
+            Swal.fire({
                 title: 'Oops something went wrong!',
                 icon: "warning",
                 confirmButtonText: 'Reload Page',
@@ -69,19 +63,19 @@ function requestLogin(username, password, fields) {
                     }
                     window.location.reload()
                 },
-            });*/
+            });
         }
     });
     request.open("POST", "/api/internal/login", true);
     request.setRequestHeader("Content-Type", "application/json");
-    request.send(JSON.stringify(new LoginRequestingJson(username, password)))
+    request.send(JSON.stringify(new LoginRequestJson(username, password)))
 }
 
 function handleLoginReponse(response, fields) {
     //Swal.close();
     enableLoginForm(fields);
     if (response.success) {
-        /*Swal.fire({
+        Swal.fire({
             title: 'You are succesfully logged in!',
             icon: "success",
             confirmButtonText: 'to Dashboard',
@@ -93,7 +87,7 @@ function handleLoginReponse(response, fields) {
             showConfirmButton: true,
             keydownListenerCapture: false,
             allowOutsideClick: false,
-        });*/
+        });
         window.location.replace("/")
     } else {
 

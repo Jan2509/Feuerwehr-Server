@@ -296,8 +296,8 @@ class NotificationServer constructor(
     }
 }
 object DbSettings {
-    val db = Database.connect("jdbc:mysql://localhost:3306/test", driver = "com.mysql.jdbc.Driver",
-    user = "root", password = "")
+    val db = Database.connect("jdbc:mysql://192.168.111.67:3306/test", driver = "com.mysql.jdbc.Driver",
+    user = "root", password = "25O92oo1")
 }
 private data class UserPrincipal(val id: Int, val user: WebUserDAO) : Principal {
     companion object Static {
