@@ -24,6 +24,10 @@ import io.ktor.server.netty.Netty
 import io.ktor.sessions.*
 import kotlinx.html.body
 import kotlinx.html.head
+import me.feuerwehr.notification.server.web.components.html.FillerContainer
+import me.feuerwehr.notification.server.web.components.html.OuterPage
+import me.feuerwehr.notification.server.web.components.json.EmptyJSON
+import me.feuerwehr.notification.server.web.components.json.MessageJSON
 import me.feuerwehr.notification.server.web.user.WebUserSession
 import me.feuerwehr.notification.server.database.dao.WebUserDAO
 import me.feuerwehr.notification.server.database.table.WebUserTable
@@ -42,14 +46,11 @@ import io.ktor.http.cio.websocket.pingPeriod
 import io.ktor.http.cio.websocket.timeout
 import io.ktor.http.content.CachingOptions
 import io.ktor.jackson.jackson
+import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelineContext
 import io.ktor.websocket.WebSockets
 import io.ktor.websocket.webSocket
 import kotlinx.html.unsafe
-import me.feuerwehr.notification.server.web.components.html.FillerContainer
-import me.feuerwehr.notification.server.web.components.html.OuterPage
-import me.feuerwehr.notification.server.web.components.json.EmptyJSON
-import me.feuerwehr.notification.server.web.components.json.MessageJSON
 import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
@@ -61,14 +62,13 @@ import java.time.Duration
 
 
 class NotificationServer constructor(
-    private val config: Konf = Konf{(addSpec(ServerSpec))},
-    private val configFile: File = File("config")
-    )  {
-    private lateinit var database: Database
+    private val configFile: File = File("config.yml")
+) {
     private val mdParser = Parser.builder().build()
     private val htmlRenderer = HtmlRenderer.builder()
         .build()
-    private val userPrincipalCache = CacheBuilder.newBuilder()
+
+    private fun createUserPrincipalCache(database: Database) = CacheBuilder.newBuilder()
         .weakValues()
         .build<WebUserSession, UserPrincipal?>(object : CacheLoader<WebUserSession, UserPrincipal?>() {
             override fun load(key: WebUserSession) =
@@ -77,34 +77,38 @@ class NotificationServer constructor(
                     else -> UserPrincipal(key.userID, user)
                 }
         })
+
+    @KtorExperimentalAPI
     fun enable() {
-        initConfig()
-        DbSettings.setConfig(config)
-        database = DbSettings.db
-        initDatabase()
+        val config = initConfig()
+        val database = createDatabase(config)
+        initDatabase(database)
 
         val sessionStorageString = ""
         val sessionStorage = when {
             sessionStorageString.isBlank() -> SessionStorageMemory()
-            else -> directorySessionStorage(File(sessionStorageString),true)
+            else -> directorySessionStorage(File(sessionStorageString), true)
         }
+        val webHost = config[ConnectionSpec.host]
+        val webPort = config[ConnectionSpec.port]
         val webconfig = applicationEngineEnvironment {
             connector {
-                host = "127.0.0.1"
-                port = 8080
+                this.host = webHost
+                this.port = webPort
             }
             module {
-                main(sessionStorage)
+                main(sessionStorage, database)
                 loginPage()
                 mainPages()
-                api()
+                api(database)
             }
         }
         val server = embeddedServer(Netty, webconfig)
         server.start(wait = true)
     }
 
-    fun Application.main(sessionStorage: SessionStorage) {
+    @KtorExperimentalAPI
+    fun Application.main(sessionStorage: SessionStorage, database: Database) {
         routing {
             static("assets") {
                 resources("/web/assets")
@@ -164,11 +168,12 @@ class NotificationServer constructor(
         install(Authentication) {
             this.session<WebUserSession>("Feuerwehr-Login") {
                 challenge("/login")
-                validate { call -> userPrincipalCache[call] }
+                validate { call -> createUserPrincipalCache(database)[call] }
             }
 
         }
     }
+
     private fun Application.mainPages() {
         routing {
             authenticate("Feuerwehr-Login") {
@@ -217,20 +222,20 @@ class NotificationServer constructor(
         }
     }
 
-    fun Application.api() {
+    fun Application.api(database: Database) {
         routing() {
             route("api") {
-                apiInternal()
+                apiInternal(database)
             }
         }
     }
 
-    private fun Route.apiInternal() {
+    private fun Route.apiInternal(database: Database) {
         route("internal") {
             post("login") {
                 //delay(Duration.ofSeconds(3))
                 runCatching {
-                    if (validSession()) {
+                    if (validSession(database)) {
                         call.respond(HttpStatusCode.BadRequest, "you already logged in")
                     } else {
                         val request = call.receive(LoginRequestingJSON::class)
@@ -278,7 +283,14 @@ class NotificationServer constructor(
         }
     }
 
-    private fun initConfig(){
+    private fun initConfig(): Konf = ConfigWrapper(Konf {
+        listOf(
+            ConnectionSpec,
+            DatabaseSpec
+        ).forEach { spec ->
+            addSpec(spec)
+        }
+    }).also { config ->
         if (configFile.exists())
             config.load(configFile)
         else {
@@ -286,7 +298,8 @@ class NotificationServer constructor(
             config.save(configFile)
         }
     }
-    private fun initDatabase() = transaction(database) {
+
+    private fun initDatabase(database: Database) = transaction(database) {
         SchemaUtils.createMissingTablesAndColumns(WebUserTable)
         if (!WebUserTable.selectAll().any()) {
             val password = RandomStringUtils.randomAlphabetic(8)
@@ -295,37 +308,43 @@ class NotificationServer constructor(
                 username = user
                 setPassword(password)
             }
-            println("[Info] Das ist dein "+ user +" Passwort: " + password)
+            println("[Info] Das ist dein " + user + " Passwort: " + password)
         }
     }
-    private fun PipelineContext<*, ApplicationCall>.validSession() = runCatching {
+
+    private fun PipelineContext<*, ApplicationCall>.validSession(database: Database) = runCatching {
         val session = call.sessions.get<WebUserSession>()
         return@runCatching session != null && transaction(database) { WebUserDAO.findById(session.userID) != null }
     }.getOrElse {
         false
     }
-}
-object ServerSpec : ConfigSpec("Connection") {
-    val host by optional("127.0.0.1", "Server Host")
-    val port by optional<Int>(8080,"Server Port")
 
-    object Database : ConfigSpec("Database") {
-        val dataHost by optional("127.0.0.1", "Datenbank Host")
-        val dataPort by optional("3306", "Datenbank Port")
-        val dataUser by optional("root", "Datenbank User")
-        val dataPass by required<String>(null, "Datenbank Password")
-        val database by required<String>(null, "Datenbank Password")
-    }
+    private fun createDatabase(config: Konf) = Database.connect(
+        "jdbc:mysql://" +
+                config[DatabaseSpec.dataHost] +
+                ":" + config[DatabaseSpec.dataPort] + "/" + config[DatabaseSpec.database],
+        driver = "com.mysql.jdbc.Driver",
+        user = config[DatabaseSpec.dataUser],
+        password = config[DatabaseSpec.dataPass]
+    )
 
 }
-object DbSettings {
-    private lateinit var config: Konf
-    fun setConfig(config:Konf){
-        this.config = config
-    }
-    val db = Database.connect("jdbc:mysql://"+config[ServerSpec.Database.dataHost]+":"+config[ServerSpec.Database.dataPort]+"/"+config[ServerSpec.Database.database], driver = "com.mysql.jdbc.Driver",
-    user = config[ServerSpec.Database.dataUser], password = config[ServerSpec.Database.dataPass])
+
+//object ServerSpec : ConfigSpec("") {
+object ConnectionSpec : ConfigSpec("Connection") {
+    val host by optional("127.0.0.1", "Host")
+    val port by optional<Int>(8080, "Port")
 }
+
+object DatabaseSpec : ConfigSpec("Database") {
+    val dataHost by optional("localhost", "Host")
+    val dataPort by optional("3306", "Port")
+    val dataUser by optional("root", "User")
+    val dataPass by optional("", "Password")
+    val database by optional("", "Database")
+}
+
+//}
 private data class UserPrincipal(val id: Int, val user: WebUserDAO) : Principal {
     companion object Static {
         private val logger = LoggerFactory.getLogger(UserPrincipal::class.java)

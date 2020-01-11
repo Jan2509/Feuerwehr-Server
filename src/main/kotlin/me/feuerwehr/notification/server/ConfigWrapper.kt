@@ -1,7 +1,5 @@
 package me.feuerwehr.notification.server
 
-import me.feuerwehr.notification.server.Konf
-
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.uchuhimo.konf.*
 import com.uchuhimo.konf.source.*
