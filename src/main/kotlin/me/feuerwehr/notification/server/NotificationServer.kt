@@ -2,6 +2,7 @@ package me.feuerwehr.notification.server
 
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
+import com.uchuhimo.konf.ConfigSpec
 import io.ktor.application.Application
 import io.ktor.application.call
 import io.ktor.application.install
@@ -57,13 +58,13 @@ import org.jetbrains.exposed.sql.selectAll
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.time.Duration
-import javax.inject.Singleton
 
 
-@Singleton
 class NotificationServer constructor(
-    private val database: Database = DbSettings.db
+    private val config: Konf = Konf{(addSpec(ServerSpec))},
+    private val configFile: File = File("config")
     )  {
+    private lateinit var database: Database
     private val mdParser = Parser.builder().build()
     private val htmlRenderer = HtmlRenderer.builder()
         .build()
@@ -77,6 +78,9 @@ class NotificationServer constructor(
                 }
         })
     fun enable() {
+        initConfig()
+        DbSettings.setConfig(config)
+        database = DbSettings.db
         initDatabase()
 
         val sessionStorageString = ""
@@ -273,6 +277,15 @@ class NotificationServer constructor(
 
         }
     }
+
+    private fun initConfig(){
+        if (configFile.exists())
+            config.load(configFile)
+        else {
+            configFile.parentFile?.mkdirs()
+            config.save(configFile)
+        }
+    }
     private fun initDatabase() = transaction(database) {
         SchemaUtils.createMissingTablesAndColumns(WebUserTable)
         if (!WebUserTable.selectAll().any()) {
@@ -292,9 +305,26 @@ class NotificationServer constructor(
         false
     }
 }
+object ServerSpec : ConfigSpec("Connection") {
+    val host by optional("127.0.0.1", "Server Host")
+    val port by optional<Int>(8080,"Server Port")
+
+    object Database : ConfigSpec("Database") {
+        val dataHost by optional("127.0.0.1", "Datenbank Host")
+        val dataPort by optional("3306", "Datenbank Port")
+        val dataUser by optional("root", "Datenbank User")
+        val dataPass by required<String>(null, "Datenbank Password")
+        val database by required<String>(null, "Datenbank Password")
+    }
+
+}
 object DbSettings {
-    val db = Database.connect("jdbc:mysql://192.168.111.67:3306/test", driver = "com.mysql.jdbc.Driver",
-    user = "root", password = "25O92oo1")
+    private lateinit var config: Konf
+    fun setConfig(config:Konf){
+        this.config = config
+    }
+    val db = Database.connect("jdbc:mysql://"+config[ServerSpec.Database.dataHost]+":"+config[ServerSpec.Database.dataPort]+"/"+config[ServerSpec.Database.database], driver = "com.mysql.jdbc.Driver",
+    user = config[ServerSpec.Database.dataUser], password = config[ServerSpec.Database.dataPass])
 }
 private data class UserPrincipal(val id: Int, val user: WebUserDAO) : Principal {
     companion object Static {
