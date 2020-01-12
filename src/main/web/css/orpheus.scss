@@ -14,3 +14,19 @@ body {
 .container {
   box-shadow: 0 0 20px;
 }
+.navbar-brand {
+  background: $color-primary-0;
+}
+.navbar-item {
+  background: $color-primary-0;
+  color: #FFFFFF;
+}
+.navbar-item:hover {
+  background: $rgba-primary-0;
+}
+.navbar-menu {
+  background: $color-primary-0;
+}
+.navbar-dropdown {
+  background: $color-primary-0;
+}

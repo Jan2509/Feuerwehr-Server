@@ -9,10 +9,14 @@ import '@fortawesome/fontawesome-free/js/brands'
 /* Scripts */
 import {startLogin} from "./Feuerwehr-login";
 import {handleLogout} from "./Feuerwehr-logout";
+import {initOuterPage} from "./outer-page";
 
 window.loginPage = function () {
     startLogin()
 };
 window.onLogoutInput = function () {
     handleLogout()
+};
+window.onOuterPageFinish = function () {
+    initOuterPage()
 };

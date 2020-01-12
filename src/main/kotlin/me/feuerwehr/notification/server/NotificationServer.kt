@@ -1,5 +1,6 @@
 package me.feuerwehr.notification.server
 
+import com.google.common.annotations.Beta
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import com.uchuhimo.konf.ConfigSpec
@@ -24,15 +25,11 @@ import io.ktor.server.netty.Netty
 import io.ktor.sessions.*
 import kotlinx.html.body
 import kotlinx.html.head
-import me.feuerwehr.notification.server.web.components.html.FillerContainer
-import me.feuerwehr.notification.server.web.components.html.OuterPage
 import me.feuerwehr.notification.server.web.components.json.EmptyJSON
 import me.feuerwehr.notification.server.web.components.json.MessageJSON
 import me.feuerwehr.notification.server.web.user.WebUserSession
 import me.feuerwehr.notification.server.database.dao.WebUserDAO
 import me.feuerwehr.notification.server.database.table.WebUserTable
-import me.feuerwehr.notification.server.web.components.html.DefaultPageHead
-import me.feuerwehr.notification.server.web.components.html.LoginBoxPage
 import me.feuerwehr.notification.server.web.components.json.rest.LoginRequestingJSON
 import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
 import org.jetbrains.exposed.sql.Database
@@ -45,12 +42,14 @@ import io.ktor.http.ContentType
 import io.ktor.http.cio.websocket.pingPeriod
 import io.ktor.http.cio.websocket.timeout
 import io.ktor.http.content.CachingOptions
+import io.ktor.http.content.resource
 import io.ktor.jackson.jackson
 import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelineContext
 import io.ktor.websocket.WebSockets
 import io.ktor.websocket.webSocket
 import kotlinx.html.unsafe
+import me.feuerwehr.notification.server.web.components.html.*
 import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
@@ -67,7 +66,7 @@ class NotificationServer constructor(
     private val mdParser = Parser.builder().build()
     private val htmlRenderer = HtmlRenderer.builder()
         .build()
-
+    @Beta
     private fun createUserPrincipalCache(database: Database) = CacheBuilder.newBuilder()
         .weakValues()
         .build<WebUserSession, UserPrincipal?>(object : CacheLoader<WebUserSession, UserPrincipal?>() {
@@ -112,7 +111,7 @@ class NotificationServer constructor(
         routing {
             static("assets") {
                 resources("/web/assets")
-                //resource("favicon.ico", "/web/assets/meta/favicon.ico")
+                resource("favicon.ico", "/web/assets/meta/favicon.ico")
             }
         }
         install(CachingHeaders) {
@@ -184,6 +183,14 @@ class NotificationServer constructor(
                             insert(FillerContainer) {
 
                             }
+                        }
+                    }
+                }
+                get("/User") {
+                    call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
+
+                        content{
+                            insert(UserContainer) {}
                         }
                     }
                 }

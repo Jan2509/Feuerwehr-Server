@@ -1,6 +1,6 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import com.github.jengelman.gradle.plugins.shadow.tasks.ConfigureShadowRelocation
+import org.apache.tools.ant.taskdefs.condition.Os
 
 plugins {
     java
@@ -67,4 +67,42 @@ tasks.withType<ShadowJar> {
     version = null
     // minimize{ exclude("com.fasterxml.jackson.*:.*:.*", "org.jetbrains.kotlin:kotlin-reflect:.*") }
 
+}
+fun Copy.init() {
+    dependsOn("build-web-pack")
+}
+tasks.named(JavaPlugin.CLASSES_TASK_NAME) {
+    dependsOn("copy-web-pack")
+}
+tasks.create<Copy>("copy-web-pack") {
+    init()
+    from(File(buildDir, "web/"))
+
+    into(File(buildDir, "resources/main/web/assets/"))
+    outputs.upToDateWhen { false }
+}
+tasks.create<Exec>("npm-install") {
+    //dependsOn(JavaPlugin.PROCESS_RESOURCES_TASK_NAME)
+    workingDir(File(projectDir, "src/main/web"))
+    val npm = if (Os.isFamily(Os.FAMILY_WINDOWS)) "npm.cmd" else "npm"
+    if (File("node_modules").exists())
+        setCommandLine("""echo "already installed"""")
+    else
+        setCommandLine(npm, "install")
+    standardOutput = System.out
+    errorOutput = System.err
+    outputs.upToDateWhen { File("node_modules").exists() }
+}
+
+tasks.create<Exec>("build-web-pack") {
+    dependsOn(JavaPlugin.PROCESS_RESOURCES_TASK_NAME, "npm-install")
+    workingDir(File(projectDir, "src/main/web"))
+    println(workingDir.absolutePath)
+    val npm = if (Os.isFamily(Os.FAMILY_WINDOWS)) "npm.cmd" else "npm"
+    setCommandLine(npm, "run", "webpack")
+    // setCommandLine("./node_modules/.bin/webpack")
+
+    standardOutput = System.out
+    errorOutput = System.err
+    outputs.upToDateWhen { false }
 }

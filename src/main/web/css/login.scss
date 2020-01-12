@@ -11,14 +11,14 @@
   margin-left: -150px;
   padding: 10px;
 
-  background-color: #ffffff;
+  background-color: #FFFFFF;
   box-shadow: 0 0 10px;
   border-radius: 10px;
   z-index: 10;
 }
 
 .login_body {
-  background: #6fa9ff url("../img/wolf-1341881_1920.jpg") no-repeat fixed center;
+  background: #113764  no-repeat fixed center;
   position: absolute;
   overflow: hidden;
   margin: 0;
@@ -27,4 +27,7 @@
   right: 0;
   left: 0;
 
+}
+#login-btn {
+  background: #ffff00
 }
