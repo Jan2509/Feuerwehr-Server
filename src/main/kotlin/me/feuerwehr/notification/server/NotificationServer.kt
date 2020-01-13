@@ -193,6 +193,7 @@ class NotificationServer constructor(
 
                         content{
                             insert(UserContainer) {}
+                            insert(UserList) {}
                         }
                     }
                 }
