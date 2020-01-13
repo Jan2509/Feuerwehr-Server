@@ -1,6 +1,7 @@
 package me.feuerwehr.notification.programm
 
 
+import io.ktor.util.KtorExperimentalAPI
 import org.fusesource.jansi.AnsiConsole
 import me.feuerwehr.notification.server.NotificationServer
 import picocli.CommandLine
@@ -17,6 +18,7 @@ class Server  : Runnable {
         names = ["--local", "-h2"]
     )
     val server = NotificationServer()
+    @KtorExperimentalAPI
     override fun run(){
         try{
             server.enable()

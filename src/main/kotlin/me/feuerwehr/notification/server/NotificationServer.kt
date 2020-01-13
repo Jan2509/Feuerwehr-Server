@@ -30,8 +30,8 @@ import me.feuerwehr.notification.server.web.components.json.MessageJSON
 import me.feuerwehr.notification.server.web.user.WebUserSession
 import me.feuerwehr.notification.server.database.dao.WebUserDAO
 import me.feuerwehr.notification.server.database.table.WebUserTable
-import me.feuerwehr.notification.server.web.components.json.rest.LoginRequestingJSON
-import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
+import me.feuerwehr.notification.server.web.components.json.rest.CreateRequestingJSON
+import me.feuerwehr.notification.server.web.components.json.rest.CreateResponseJSON
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
 import io.ktor.application.ApplicationCall
@@ -50,6 +50,8 @@ import io.ktor.websocket.WebSockets
 import io.ktor.websocket.webSocket
 import kotlinx.html.unsafe
 import me.feuerwehr.notification.server.web.components.html.*
+import me.feuerwehr.notification.server.web.components.json.rest.LoginRequestingJSON
+import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
 import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
@@ -195,6 +197,16 @@ class NotificationServer constructor(
                     }
                 }
 
+                get("/Einsaetze"){
+                    call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
+                        content {
+                            insert(FillerContainer) {
+
+                            }
+                        }
+                    }
+                }
+
                 get("/about") {
                     call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
                         val doc =
@@ -268,6 +280,7 @@ class NotificationServer constructor(
                     call.respond(HttpStatusCode.InternalServerError)
                 }
             }
+
             authenticate("Feuerwehr-Login") {
                 get("logout") {
 
@@ -284,6 +297,36 @@ class NotificationServer constructor(
                         return@webSocket
                     }
 
+                }
+                post("create") {
+                    //delay(Duration.ofSeconds(3))
+                    //runCatching {
+                        val createRequest = call.receive(CreateRequestingJSON::class)
+                        val userNotExists : Boolean = transaction(database) {
+                            WebUserDAO.find { WebUserTable.username like createRequest.username }.empty()
+                        }
+                        if (userNotExists == true) {
+                            transaction(database) {
+                                WebUserDAO.new {
+                                    username = createRequest.username
+                                    setPassword(createRequest.password)
+                                }
+                            }
+                            call.respond(
+                                CreateResponseJSON(
+                                    true
+                                )
+                            )
+                        } else {
+                            call.respond(
+                                CreateResponseJSON(
+                                    false
+                                )
+                            )
+                        }
+                    //}.getOrElse {
+                    //    call.respond(HttpStatusCode.InternalServerError)
+                    //}
                 }
             }
 

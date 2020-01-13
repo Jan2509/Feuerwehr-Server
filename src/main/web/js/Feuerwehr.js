@@ -10,6 +10,7 @@ import '@fortawesome/fontawesome-free/js/brands'
 import {startLogin} from "./Feuerwehr-login";
 import {handleLogout} from "./Feuerwehr-logout";
 import {initOuterPage} from "./outer-page";
+import {startCreate} from "./Feuerwehr-User";
 
 window.loginPage = function () {
     startLogin()
@@ -19,4 +20,7 @@ window.onLogoutInput = function () {
 };
 window.onOuterPageFinish = function () {
     initOuterPage()
+};
+window.createPage = function () {
+    startCreate()
 };

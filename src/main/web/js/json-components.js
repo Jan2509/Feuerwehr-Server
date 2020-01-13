@@ -1,4 +1,4 @@
-class LoginRequestJson {
+class RequestJson {
 
     constructor(username, password) {
         this.username = username;
@@ -6,4 +6,4 @@ class LoginRequestJson {
     }
 }
 
-export {LoginRequestJson}
+export {RequestJson}

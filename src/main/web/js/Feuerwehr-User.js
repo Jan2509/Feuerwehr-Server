@@ -2,16 +2,16 @@ import $ from 'jquery'
 import Swal from "sweetalert2";
 import {RequestJson} from "./json-components.js";
 
-function startLogin() {
+function startCreate() {
 
-    $('#login-form').submit(function (event) {
+    $('#create-form').submit(function (event) {
         event.preventDefault();
         let usernameField = $('#username-input');
         let passwordField = $('#password-input');
-        let loginBTM = $('#login-btn');
+        let loginBTM = $('#create-btn');
         let username = usernameField.val();
         let password = passwordField.val();
-        requestLogin(username, password, {
+        requestCreate(username, password, {
             btn: loginBTM,
             usernameField: usernameField,
             passwordField: passwordField
@@ -20,7 +20,7 @@ function startLogin() {
 
 }
 
-function requestLogin(username, password, fields) {
+function requestCreate(username, password, fields) {
     Swal.fire({
         title: 'Please wait',
         showCancelButton: false,
@@ -32,16 +32,16 @@ function requestLogin(username, password, fields) {
             Swal.showLoading();
         }
     });
-    disableLoginForm(fields);
+    disableCreateForm(fields);
 
 
     const request = new XMLHttpRequest();
     request.addEventListener('load', function (event) {
         if (request.status >= 200 && request.status < 300) {
-            handleLoginReponse(JSON.parse(request.responseText), fields);
+            handleCreateReponse(JSON.parse(request.responseText), fields);
         } else {
             console.warn(request.statusText, request.responseText);
-            enableLoginForm(fields);
+            enableCreateForm(fields);
             Swal.fire({
                 title: 'Oops something went wrong!',
                 icon: "warning",
@@ -62,21 +62,21 @@ function requestLogin(username, password, fields) {
             });
         }
     });
-    request.open("POST", "/api/internal/login", true);
+    request.open("POST", "/api/internal/create", true);
     request.setRequestHeader("Content-Type", "application/json");
     request.send(JSON.stringify(new RequestJson(username, password)))
 }
 
-function handleLoginReponse(response, fields) {
+function handleCreateReponse(response, fields) {
     //Swal.close();
-    enableLoginForm(fields);
+    enableCreateForm(fields);
     if (response.success) {
         Swal.fire({
-            title: 'You are succesfully logged in!',
+            title: 'You have succesfully created an User!',
             icon: "success",
-            confirmButtonText: 'to Dashboard',
+            confirmButtonText: 'Close',
             onAfterClose() {
-                window.location.replace("/")
+                window.location.replace("/User")
             },
             showCancelButton: false,
             showCloseButton: false,
@@ -88,7 +88,7 @@ function handleLoginReponse(response, fields) {
     } else {
 
         Swal.fire({
-            title: 'username or password wrong!',
+            title: 'Oops something went wrong!',
             icon: "error",
             confirmButtonText: 'Retry',
             showCancelButton: false,
@@ -100,7 +100,7 @@ function handleLoginReponse(response, fields) {
     }
 }
 
-function disableLoginForm(fields) {
+function disableCreateForm(fields) {
     fields.usernameField.attr("disabled", true);
     fields.passwordField.attr("disabled", true);
     fields.btn.attr("disabled", true);
@@ -109,7 +109,7 @@ function disableLoginForm(fields) {
 
 }
 
-function enableLoginForm(fields) {
+function enableCreateForm(fields) {
     fields.usernameField.attr("disabled", false);
     fields.passwordField.attr("disabled", false);
     fields.btn.attr("disabled", false);
@@ -118,4 +118,4 @@ function enableLoginForm(fields) {
 
 }
 
-export {startLogin}
+export {startCreate}

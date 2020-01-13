@@ -6,7 +6,7 @@ import kotlinx.html.*
 object UserContainer : Template<DIV> {
         override fun DIV.apply() {
             form {
-                id = "login-form"
+                id = "create-form"
                 div("field") {
                     label("label") { +"Username" }
                     div("control") {
@@ -28,12 +28,13 @@ object UserContainer : Template<DIV> {
                 }
                 div("control") {
                     button(classes = "button is-success is-light is-fullwidth") {
-                        id = "login-btn"
+                        id = "create-btn"
                         type = ButtonType.submit
-                        + "Login"
+                        + "Create"
 
                     }
                 }
             }
+            script { +"createPage()" }
         }
     }
