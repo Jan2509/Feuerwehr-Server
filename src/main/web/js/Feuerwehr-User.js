@@ -6,8 +6,8 @@ function startCreate() {
 
     $('#create-form').submit(function (event) {
         event.preventDefault();
-        let usernameField = $('#username-input');
-        let passwordField = $('#password-input');
+        let usernameField = $('#create-username-input');
+        let passwordField = $('#create-password-input');
         let loginBTM = $('#create-btn');
         let username = usernameField.val();
         let password = passwordField.val();

@@ -11,7 +11,7 @@ object UserContainer : Template<DIV> {
                     label("label") { +"Username" }
                     div("control") {
                         input(type = InputType.text, classes = "input") {
-                            id = "username-input"
+                            id = "create-username-input"
                             placeholder = "Username"
                         }
                     }
@@ -21,7 +21,7 @@ object UserContainer : Template<DIV> {
                     label("label") { +"Password" }
                     div("control") {
                         input(type = InputType.password, classes = "input") {
-                            id = "password-input"
+                            id = "create-password-input"
                             placeholder = "Password"
                         }
                     }

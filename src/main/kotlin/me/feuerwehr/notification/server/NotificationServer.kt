@@ -49,6 +49,7 @@ import io.ktor.util.pipeline.PipelineContext
 import io.ktor.websocket.WebSockets
 import io.ktor.websocket.webSocket
 import kotlinx.html.unsafe
+import me.feuerwehr.notification.server.database.table.WebEinsatzTable
 import me.feuerwehr.notification.server.web.components.html.*
 import me.feuerwehr.notification.server.web.components.json.rest.LoginRequestingJSON
 import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
@@ -201,7 +202,7 @@ class NotificationServer constructor(
                 get("/Einsaetze"){
                     call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
                         content {
-                            insert(FillerContainer) {
+                            insert(EinsatzList) {
 
                             }
                         }
@@ -352,6 +353,7 @@ class NotificationServer constructor(
 
     private fun initDatabase(database: Database) = transaction(database) {
         SchemaUtils.createMissingTablesAndColumns(WebUserTable)
+        SchemaUtils.createMissingTablesAndColumns(WebEinsatzTable)
         if (!WebUserTable.selectAll().any()) {
             val password = RandomStringUtils.randomAlphabetic(8)
             val user = "admin"
