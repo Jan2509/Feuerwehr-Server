@@ -2,10 +2,15 @@ package me.feuerwehr.notification.programm
 
 
 import io.ktor.util.KtorExperimentalAPI
-import org.fusesource.jansi.AnsiConsole
+import me.feuerwehr.notification.server.ServerThread
 import me.feuerwehr.notification.server.NotificationServer
+import org.slf4j.LoggerFactory
 import picocli.CommandLine
-import javax.inject.Inject
+import java.io.IOException
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.ArrayList
+import kotlin.concurrent.thread
 
 @CommandLine.Command(
     name = "FFServer.jar",
@@ -17,14 +22,21 @@ class Server  : Runnable {
     @CommandLine.Option(
         names = ["--local", "-h2"]
     )
+    //val echoServer = EchoServer()
+    val logger = LoggerFactory.getLogger("Server")
+    var warten = true
+    var sockets = ArrayList<Socket>()
+    val serverSocket = ServerSocket(1100)
     val server = NotificationServer()
     @KtorExperimentalAPI
     override fun run(){
         try{
-            server.enable()
+            logger.info("FFServer Startet")
+            server.enable(serverSocket)
         } catch (e:Exception) {
             e.printStackTrace()
         }
+        @Throws(IOException::class)
         while(true) {
             Thread.sleep(Long.MAX_VALUE)
         }

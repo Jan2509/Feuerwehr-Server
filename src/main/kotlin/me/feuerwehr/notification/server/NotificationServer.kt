@@ -3,17 +3,28 @@ package me.feuerwehr.notification.server
 import com.google.common.annotations.Beta
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
+import com.sun.xml.internal.bind.v2.model.core.ID
 import com.uchuhimo.konf.ConfigSpec
 import io.ktor.application.Application
+import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.auth.*
+import io.ktor.features.*
 import io.ktor.html.insert
 import io.ktor.html.respondHtml
+import io.ktor.html.respondHtmlTemplate
+import io.ktor.http.CacheControl
+import io.ktor.http.ContentType
 import io.ktor.http.CookieEncoding
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.cio.websocket.pingPeriod
+import io.ktor.http.cio.websocket.timeout
+import io.ktor.http.content.CachingOptions
+import io.ktor.http.content.resource
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
+import io.ktor.jackson.jackson
 import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.response.respondRedirect
@@ -23,49 +34,49 @@ import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.sessions.*
-import kotlinx.html.body
-import kotlinx.html.head
-import me.feuerwehr.notification.server.web.components.json.EmptyJSON
-import me.feuerwehr.notification.server.web.components.json.MessageJSON
-import me.feuerwehr.notification.server.web.user.WebUserSession
-import me.feuerwehr.notification.server.database.dao.WebUserDAO
-import me.feuerwehr.notification.server.database.table.WebUserTable
-import me.feuerwehr.notification.server.web.components.json.rest.CreateRequestingJSON
-import me.feuerwehr.notification.server.web.components.json.rest.CreateResponseJSON
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.transactions.transaction
-import io.ktor.application.ApplicationCall
-import io.ktor.features.*
-import io.ktor.html.respondHtmlTemplate
-import io.ktor.http.CacheControl
-import io.ktor.http.ContentType
-import io.ktor.http.cio.websocket.pingPeriod
-import io.ktor.http.cio.websocket.timeout
-import io.ktor.http.content.CachingOptions
-import io.ktor.http.content.resource
-import io.ktor.jackson.jackson
 import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelineContext
 import io.ktor.websocket.WebSockets
 import io.ktor.websocket.webSocket
+import kotlinx.html.body
+import kotlinx.html.head
 import kotlinx.html.unsafe
+import me.feuerwehr.notification.server.database.dao.WebUserDAO
 import me.feuerwehr.notification.server.database.table.WebEinsatzTable
+import me.feuerwehr.notification.server.database.table.WebUserTable
 import me.feuerwehr.notification.server.web.components.html.*
+import me.feuerwehr.notification.server.web.components.json.EmptyJSON
+import me.feuerwehr.notification.server.web.components.json.MessageJSON
+import me.feuerwehr.notification.server.web.components.json.rest.CreateRequestingJSON
+import me.feuerwehr.notification.server.web.components.json.rest.CreateResponseJSON
 import me.feuerwehr.notification.server.web.components.json.rest.LoginRequestingJSON
 import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
+import me.feuerwehr.notification.server.web.user.WebUserSession
 import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
+import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.io.OutputStream
+import java.net.ServerSocket
+import java.net.Socket
+import java.nio.charset.Charset
 import java.time.Duration
+import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.concurrent.thread
 
 
 class NotificationServer constructor(
     private val configFile: File = File("config.yml")
 ) {
+    val logger = LoggerFactory.getLogger("FFServer")
+    var sockets: ArrayList<Socket> = ArrayList()
     private val mdParser = Parser.builder().build()
     private val htmlRenderer = HtmlRenderer.builder()
         .build()
@@ -81,7 +92,7 @@ class NotificationServer constructor(
         })
 
     @KtorExperimentalAPI
-    fun enable() {
+    fun enable(serverSocket: ServerSocket) {
         val config = initConfig()
         val database = createDatabase(config)
         initDatabase(database)
@@ -106,9 +117,27 @@ class NotificationServer constructor(
             }
         }
         val server = embeddedServer(Netty, webconfig)
+        thread{
+            val applogger = LoggerFactory.getLogger("App Server")
+            applogger.info("Responding at 127.0.0.1:1100")
+            while(true) {
+                val socket = serverSocket.accept()
+                logger.info("Client connected: ${socket.inetAddress.hostAddress}")
+                sockets.add(socket)
+                // Run client in it's own thread.
+                thread{ ServerThread(socket).run() }
+
+            }
+        }
         server.start(wait = true)
     }
-
+    fun alarm(sockets: ArrayList<Socket>, alarmid : EntityID<ID>){
+        sockets.forEach { s ->
+            val socket = s
+            val writer: OutputStream = socket.getOutputStream()
+            writer.write((alarmid.toString() + '\n').toByteArray(Charset.defaultCharset()))
+        }
+    }
     @KtorExperimentalAPI
     fun Application.main(sessionStorage: SessionStorage, database: Database) {
         routing {
@@ -361,7 +390,7 @@ class NotificationServer constructor(
                 username = user
                 setPassword(password)
             }
-            println("[Info] Das ist dein " + user + " Passwort: " + password)
+            logger.info("Das ist dein " + user + " Passwort: " + password)
         }
     }
 
@@ -386,7 +415,7 @@ class NotificationServer constructor(
 //object ServerSpec : ConfigSpec("") {
 object ConnectionSpec : ConfigSpec("Connection") {
     val host by optional("127.0.0.1", "Host")
-    val port by optional<Int>(8080, "Port")
+    val port by optional(8080, "Port")
 }
 
 object DatabaseSpec : ConfigSpec("Database") {
