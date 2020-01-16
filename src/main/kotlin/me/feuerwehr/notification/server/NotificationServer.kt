@@ -195,7 +195,7 @@ class NotificationServer constructor(
                     call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
 
                         content {
-                            insert(FillerContainer) {
+                            insert(EinsatzContainer) {
 
                             }
                         }
