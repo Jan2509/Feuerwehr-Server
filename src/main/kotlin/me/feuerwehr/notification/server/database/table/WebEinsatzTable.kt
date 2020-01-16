@@ -10,5 +10,7 @@ object WebEinsatzTable : IntIdTable("Einsaetze") {
     val ort = varchar("Ort", 100)
     val strasse = varchar("Strasse", 100)
     val hausnr = varchar("HausNr", 1000)
-    val datum = datetime("Datum").nullable()
+    val datum = varchar("Datum",25)
+    val zeit = varchar("Zeit",25)
+    val bemerkungen = text("Bemerkungen")
 }

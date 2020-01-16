@@ -32,6 +32,8 @@ object EinsatzList : Template<DIV> {
                         th { +"PLZ" }
                         th { +"Ort" }
                         th { +"Datum" }
+                        th { +"Zeit" }
+                        th { +"Bemerkungen" }
                     }
                 }
                 tbody {
@@ -48,7 +50,9 @@ object EinsatzList : Template<DIV> {
                                 td { +einsatz.hausnr }
                                 td { +einsatz.plz }
                                 td { +einsatz.ort }
-                                td { +einsatz.datum.toString() }
+                                td { +einsatz.datum }
+                                td { +einsatz.zeit }
+                                td { +einsatz.bemerkungen }
                             }
                             it++
                         } else if (einsatz == null && it <2) {

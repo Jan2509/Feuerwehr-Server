@@ -3,7 +3,6 @@ package me.feuerwehr.notification.server
 import com.google.common.annotations.Beta
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
-import com.sun.xml.internal.bind.v2.model.core.ID
 import com.uchuhimo.konf.ConfigSpec
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
@@ -18,8 +17,6 @@ import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.http.CookieEncoding
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.cio.websocket.pingPeriod
-import io.ktor.http.cio.websocket.timeout
 import io.ktor.http.content.CachingOptions
 import io.ktor.http.content.resource
 import io.ktor.http.content.resources
@@ -36,47 +33,36 @@ import io.ktor.server.netty.Netty
 import io.ktor.sessions.*
 import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelineContext
-import io.ktor.websocket.WebSockets
-import io.ktor.websocket.webSocket
 import kotlinx.html.body
 import kotlinx.html.head
 import kotlinx.html.unsafe
+import me.feuerwehr.notification.server.database.dao.WebEinsatzDAO
 import me.feuerwehr.notification.server.database.dao.WebUserDAO
 import me.feuerwehr.notification.server.database.table.WebEinsatzTable
 import me.feuerwehr.notification.server.database.table.WebUserTable
 import me.feuerwehr.notification.server.web.components.html.*
 import me.feuerwehr.notification.server.web.components.json.EmptyJSON
 import me.feuerwehr.notification.server.web.components.json.MessageJSON
-import me.feuerwehr.notification.server.web.components.json.rest.CreateRequestingJSON
-import me.feuerwehr.notification.server.web.components.json.rest.CreateResponseJSON
-import me.feuerwehr.notification.server.web.components.json.rest.LoginRequestingJSON
-import me.feuerwehr.notification.server.web.components.json.rest.LoginResponseJSON
+import me.feuerwehr.notification.server.web.components.json.rest.*
 import me.feuerwehr.notification.server.web.user.WebUserSession
 import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
-import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.io.OutputStream
-import java.net.ServerSocket
-import java.net.Socket
-import java.nio.charset.Charset
-import java.time.Duration
+import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.collections.ArrayList
-import kotlin.concurrent.thread
 
 
 class NotificationServer constructor(
     private val configFile: File = File("config.yml")
 ) {
-    val logger = LoggerFactory.getLogger("FFServer")
-    var sockets: ArrayList<Socket> = ArrayList()
+    private val logger: Logger = LoggerFactory.getLogger("FFServer")
     private val mdParser = Parser.builder().build()
     private val htmlRenderer = HtmlRenderer.builder()
         .build()
@@ -92,7 +78,7 @@ class NotificationServer constructor(
         })
 
     @KtorExperimentalAPI
-    fun enable(serverSocket: ServerSocket) {
+    fun enable() {
         val config = initConfig()
         val database = createDatabase(config)
         initDatabase(database)
@@ -118,8 +104,6 @@ class NotificationServer constructor(
         }
         val server = embeddedServer(Netty, webconfig)
         server.start(wait = true)
-    }
-    fun alarm(){
     }
     @KtorExperimentalAPI
     fun Application.main(sessionStorage: SessionStorage, database: Database) {
@@ -148,10 +132,6 @@ class NotificationServer constructor(
                     else -> null
                 }
             }
-        }
-        install(WebSockets) {
-            pingPeriod = Duration.ofSeconds(10)
-            timeout = Duration.ofSeconds(30)
         }
         install(Compression) {
             gzip {
@@ -236,7 +216,7 @@ class NotificationServer constructor(
         }
     }
 
-    fun Application.loginPage() {
+    private fun Application.loginPage() {
         routing {
             get("/login") {
                 if (call.authentication.principal != null) {
@@ -255,8 +235,8 @@ class NotificationServer constructor(
         }
     }
 
-    fun Application.api(database: Database) {
-        routing() {
+    private fun Application.api(database: Database) {
+        routing {
             route("api") {
                 apiInternal(database)
             }
@@ -305,21 +285,14 @@ class NotificationServer constructor(
                     val session = call.sessions.get<WebUserSession>()
                     call.respond(session ?: EmptyJSON)
                 }
-                webSocket {
-                    val webUserSession = call.sessions.get<WebUserSession>() ?: run {
-
-                        return@webSocket
-                    }
-
-                }
                 post("create") {
                     //delay(Duration.ofSeconds(3))
-                    //runCatching {
+                    runCatching {
                         val createRequest = call.receive(CreateRequestingJSON::class)
                         val userNotExists : Boolean = transaction(database) {
                             WebUserDAO.find { WebUserTable.username like createRequest.username }.empty()
                         }
-                        if (userNotExists == true) {
+                        if (userNotExists) {
                             transaction(database) {
                                 WebUserDAO.new {
                                     username = createRequest.username
@@ -338,6 +311,33 @@ class NotificationServer constructor(
                                 )
                             )
                         }
+                    }.getOrElse {
+                        call.respond(HttpStatusCode.InternalServerError)
+                    }
+                }
+                post("createEinsatz") {
+                    //delay(Duration.ofSeconds(3))
+                    //runCatching {
+                        val createRequest = call.receive(CreateEinsatzRequestingJSON::class)
+                        val date : String = alarmdate()
+                        val time : String = alarmtime()
+                        transaction(database) {
+                            WebEinsatzDAO.new {
+                                stichwort = createRequest.stichwort
+                                strasse = createRequest.strasse
+                                hausnr = createRequest.hausnr
+                                plz= createRequest.plz
+                                ort = createRequest.ort
+                                datum = date
+                                zeit = time
+                                bemerkungen = createRequest.bemerkungen
+                            }
+                        }
+                        call.respond(
+                            CreateResponseJSON(
+                                true
+                            )
+                        )
                     //}.getOrElse {
                     //    call.respond(HttpStatusCode.InternalServerError)
                     //}
@@ -362,7 +362,20 @@ class NotificationServer constructor(
             config.save(configFile)
         }
     }
-
+    private fun getTimeMilis(): Long{
+        val timestamp1 = Calendar.getInstance()
+        return timestamp1.timeInMillis
+    }
+    private fun alarmdate(): String {
+        val formatter = SimpleDateFormat("dd.MM.yyyy")
+        val time = getTimeMilis()
+        return formatter.format(time)
+    }
+    private fun alarmtime(): String {
+        val formatter = SimpleDateFormat("HH:mm:ss")
+        val time = getTimeMilis()
+        return formatter.format(time)
+    }
     private fun initDatabase(database: Database) = transaction(database) {
         SchemaUtils.createMissingTablesAndColumns(WebUserTable)
         SchemaUtils.createMissingTablesAndColumns(WebEinsatzTable)
@@ -373,7 +386,7 @@ class NotificationServer constructor(
                 username = user
                 setPassword(password)
             }
-            logger.info("Das ist dein " + user + " Passwort: " + password)
+            logger.info("Das ist dein $user Passwort: $password")
         }
     }
 

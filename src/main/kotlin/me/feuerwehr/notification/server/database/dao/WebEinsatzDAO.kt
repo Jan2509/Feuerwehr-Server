@@ -17,4 +17,6 @@ class WebEinsatzDAO(id: EntityID<Int>) : IntEntity(id) {
     var plz by WebEinsatzTable.plz
     var ort by WebEinsatzTable.ort
     var datum by WebEinsatzTable.datum
+    var zeit by WebEinsatzTable.zeit
+    var bemerkungen by WebEinsatzTable.bemerkungen
 }

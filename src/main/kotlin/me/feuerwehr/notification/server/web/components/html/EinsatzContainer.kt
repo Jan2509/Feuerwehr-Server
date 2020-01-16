@@ -60,7 +60,7 @@ object EinsatzContainer : Template<DIV> {
             div("field") {
                 label("label") { +"Strasse" }
                 div("control") {
-                    input(type = InputType.password, classes = "input") {
+                    input(type = InputType.text, classes = "input") {
                         id = "create-strasse-input"
                         placeholder = "Strasse"
                     }
@@ -69,8 +69,8 @@ object EinsatzContainer : Template<DIV> {
             div("field") {
                 label("label") { +"Haus Nr" }
                 div("control") {
-                    input(type = InputType.password, classes = "input") {
-                        id = "create-strasse-input"
+                    input(type = InputType.text, classes = "input") {
+                        id = "create-hausnr-input"
                         placeholder = "Haus Nr"
                     }
                 }
@@ -78,7 +78,7 @@ object EinsatzContainer : Template<DIV> {
             div("field") {
                 label("label") { +"Postleitzahl" }
                 div("control") {
-                    input(type = InputType.password, classes = "input") {
+                    input(type = InputType.text, classes = "input") {
                         id = "create-plz-input"
                         placeholder = "Postleitzahl"
                     }
@@ -87,8 +87,8 @@ object EinsatzContainer : Template<DIV> {
             div("field") {
                 label("label") { +"Ort" }
                 div("control") {
-                    input(type = InputType.password, classes = "input") {
-                        id = "create-strasse-input"
+                    input(type = InputType.text, classes = "input") {
+                        id = "create-ort-input"
                         placeholder = "Ort"
                     }
                 }
@@ -96,7 +96,7 @@ object EinsatzContainer : Template<DIV> {
             div("field") {
                 label("label") { +"Bemerkungen" }
                 div("control") {
-                    input(type = InputType.password, classes = "input") {
+                    input(type = InputType.text, classes = "input") {
                         id = "create-bemerkungen-input"
                         placeholder = "Bemerkungen"
                     }
@@ -111,6 +111,6 @@ object EinsatzContainer : Template<DIV> {
                 }
             }
         }
-        //script { +"createEinsatzPage()" }
+        script { +"createEinsatzPage()" }
     }
 }

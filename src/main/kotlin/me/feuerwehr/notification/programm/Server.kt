@@ -22,15 +22,12 @@ class Server  : Runnable {
     )
     //val echoServer = EchoServer()
     val logger = LoggerFactory.getLogger("Server")
-    var warten = true
-    var sockets = ArrayList<Socket>()
-    val serverSocket = ServerSocket(1100)
     val server = NotificationServer()
     @KtorExperimentalAPI
     override fun run(){
         try{
             logger.info("FFServer Startet")
-            server.enable(serverSocket)
+            server.enable()
         } catch (e:Exception) {
             e.printStackTrace()
         }
