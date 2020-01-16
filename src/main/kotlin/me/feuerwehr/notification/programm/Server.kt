@@ -2,7 +2,6 @@ package me.feuerwehr.notification.programm
 
 
 import io.ktor.util.KtorExperimentalAPI
-import me.feuerwehr.notification.server.ServerThread
 import me.feuerwehr.notification.server.NotificationServer
 import org.slf4j.LoggerFactory
 import picocli.CommandLine
@@ -10,7 +9,6 @@ import java.io.IOException
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.ArrayList
-import kotlin.concurrent.thread
 
 @CommandLine.Command(
     name = "FFServer.jar",

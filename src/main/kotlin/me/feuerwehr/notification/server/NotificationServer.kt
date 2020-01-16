@@ -117,26 +117,9 @@ class NotificationServer constructor(
             }
         }
         val server = embeddedServer(Netty, webconfig)
-        thread{
-            val applogger = LoggerFactory.getLogger("App Server")
-            applogger.info("Responding at 127.0.0.1:1100")
-            while(true) {
-                val socket = serverSocket.accept()
-                logger.info("Client connected: ${socket.inetAddress.hostAddress}")
-                sockets.add(socket)
-                // Run client in it's own thread.
-                thread{ ServerThread(socket).run() }
-
-            }
-        }
         server.start(wait = true)
     }
-    fun alarm(sockets: ArrayList<Socket>, alarmid : EntityID<ID>){
-        sockets.forEach { s ->
-            val socket = s
-            val writer: OutputStream = socket.getOutputStream()
-            writer.write((alarmid.toString() + '\n').toByteArray(Charset.defaultCharset()))
-        }
+    fun alarm(){
     }
     @KtorExperimentalAPI
     fun Application.main(sessionStorage: SessionStorage, database: Database) {
