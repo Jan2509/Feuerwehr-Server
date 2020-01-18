@@ -36,8 +36,10 @@ import io.ktor.util.pipeline.PipelineContext
 import kotlinx.html.body
 import kotlinx.html.head
 import kotlinx.html.unsafe
+import me.feuerwehr.notification.server.database.dao.EinsatzTeilnahmeDAO
 import me.feuerwehr.notification.server.database.dao.WebEinsatzDAO
 import me.feuerwehr.notification.server.database.dao.WebUserDAO
+import me.feuerwehr.notification.server.database.table.EinsatzTeilnahmeTable
 import me.feuerwehr.notification.server.database.table.WebEinsatzTable
 import me.feuerwehr.notification.server.database.table.WebUserTable
 import me.feuerwehr.notification.server.web.components.html.*
@@ -48,9 +50,8 @@ import me.feuerwehr.notification.server.web.user.WebUserSession
 import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -252,6 +253,7 @@ class NotificationServer constructor(
                         call.respond(HttpStatusCode.BadRequest, "you already logged in")
                     } else {
                         val request = call.receive(LoginRequestingJSON::class)
+                        logger.info("Username "+request.username+" Password "+ request.password)
                         val user = transaction(database) {
                             WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
                         }
@@ -284,6 +286,26 @@ class NotificationServer constructor(
                 get("sessionInfo") {
                     val session = call.sessions.get<WebUserSession>()
                     call.respond(session ?: EmptyJSON)
+                }
+                post("einsatzAbfrage"){
+                    val alarmRequest = call.receive(AlarmRequestingJSON::class)
+
+                    var alarm : EinsatzTeilnahmeDAO? = null
+                    val user = transaction(database) {
+                        WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
+                    }
+                    val einsatzdata = WebEinsatzTable.id.max()
+                    if (user != null) {
+                         alarm = EinsatzTeilnahmeDAO.find { user.id eq EinsatzTeilnahmeTable.MID  and einsatzdata eq EinsatzTeilnahmeTable.EID }.firstOrNull()
+                    }
+                    if ( alarm == null) {
+                        call.respond(
+                            CreateResponseJSON(true )
+                        )
+                    } else {
+                        CreateResponseJSON(false)
+                    }
+
                 }
                 post("create") {
                     //delay(Duration.ofSeconds(3))
@@ -406,6 +428,18 @@ class NotificationServer constructor(
         password = config[DatabaseSpec.dataPass]
     )
 
+}
+
+private infix fun Any.eq(eid: Column<Int>): Op<Boolean> {
+    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+}
+
+private infix fun Any.and(einsatzdata: ExpressionWithColumnType<EntityID<Int>?>): Any {
+    TODO()
+}
+
+private infix fun <T : Comparable<T>> EntityID<T>.eq(mid: Column<T>): Any {
+    TODO()
 }
 
 //object ServerSpec : ConfigSpec("") {
