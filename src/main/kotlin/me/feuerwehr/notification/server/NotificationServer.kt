@@ -255,7 +255,6 @@ class NotificationServer constructor(
                         call.respond(HttpStatusCode.BadRequest, "you already logged in")
                     } else {
                         val request = call.receive(LoginRequestingJSON::class)
-                        logger.info("Username "+request.username+" Password "+ request.password)
                         val user = transaction(database) {
                             WebUserDAO.find { WebUserTable.username like request.username }.firstOrNull()
                         }
@@ -278,6 +277,30 @@ class NotificationServer constructor(
                     call.respond(HttpStatusCode.InternalServerError)
                 }
             }
+            post("einsatzAbfrage"){
+                val alarmRequest = call.receive(AlarmRequestingJSON::class)
+                var alarm : ExpressionWithColumnType<EntityID<Int>?>? = null
+                val user = transaction(database) {
+                    WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
+                }
+                if (user != null) {
+                    val eid = transaction(database) {WebEinsatzDAO.find {WebEinsatzTable.id eq WebEinsatzTable.id.max()}.firstOrNull()}
+                    if (eid != null) {
+                        alarm = transaction(database) {
+                            EinsatzTeilnahmeTable.id.max()
+                        }
+                    }
+                    if (alarm == null) {
+                        call.respond(
+                            CreateResponseJSON(true)
+                        )
+                    } else {
+                        call.respond(
+                            CreateResponseJSON(false)
+                        )
+                    }
+                }
+            }
 
             authenticate("Feuerwehr-Login") {
                 get("logout") {
@@ -289,22 +312,22 @@ class NotificationServer constructor(
                     val session = call.sessions.get<WebUserSession>()
                     call.respond(session ?: EmptyJSON)
                 }
-                post("einsatzAbfrage"){
-                    val alarmRequest = call.receive(AlarmRequestingJSON::class)
-                    var voralarm :Boolean = false
-                    var alarm :Boolean = false
+                post("einsatzResponse"){
+                    val alarmResponse = call.receive(AlarmReponseJSON::class)
                     val user = transaction(database) {
-                        WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
+                        WebUserDAO.find { WebUserTable.username like alarmResponse.username }.firstOrNull()
                     }
                     if (user != null){
-                        voralarm = EinsatzTeilnahmeTable.MID.equals(user.UserID)
                         transaction(database) {
-                            EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id.max() }.forEach {
-                                alarm = !voralarm
+                            val einsatz = EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max()}.firstOrNull()
+                            EinsatzTeilnahmeDAO.new {
+                                if (einsatz != null) {
+                                    EID = einsatz.id
+                                    MID = user.id
+                                }
                             }
+
                         }
-                    }
-                    if (alarm) {
                         call.respond(
                             CreateResponseJSON(true )
                         )
@@ -376,9 +399,6 @@ class NotificationServer constructor(
 
         }
     }
-    private fun Columntoint(column: Column<EntityID<Int>>) : Int {
-        return column.toString().toInt()
-    }
 
     private fun initConfig(): Konf = ConfigWrapper(Konf {
         listOf(
@@ -412,6 +432,7 @@ class NotificationServer constructor(
     private fun initDatabase(database: Database) = transaction(database) {
         SchemaUtils.createMissingTablesAndColumns(WebUserTable)
         SchemaUtils.createMissingTablesAndColumns(WebEinsatzTable)
+        SchemaUtils.createMissingTablesAndColumns(EinsatzTeilnahmeTable)
         if (!WebUserTable.selectAll().any()) {
             val password = RandomStringUtils.randomAlphabetic(8)
             val user = "admin"
