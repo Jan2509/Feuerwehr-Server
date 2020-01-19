@@ -279,27 +279,58 @@ class NotificationServer constructor(
             }
             post("einsatzAbfrage"){
                 val alarmRequest = call.receive(AlarmRequestingJSON::class)
-                var alarm : ExpressionWithColumnType<EntityID<Int>?>? = null
                 val user = transaction(database) {
                     WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
                 }
                 if (user != null) {
-                    val eid = transaction(database) {WebEinsatzDAO.find {WebEinsatzTable.id eq WebEinsatzTable.id.max()}.firstOrNull()}
-                    if (eid != null) {
-                        alarm = transaction(database) {
-                            EinsatzTeilnahmeTable.id.max()
-                        }
+                    val alarm = transaction(database) {
+                        EinsatzTeilnahmeTable.join(WebEinsatzTable, joinType = JoinType.INNER, additionalConstraint = {EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id}).slice(EinsatzTeilnahmeTable.EID, EinsatzTeilnahmeTable.MID).selectAll()
+                            .having {
+                                (EinsatzTeilnahmeTable.EID eq (WebEinsatzTable.id.max())) and (EinsatzTeilnahmeTable.MID eq user.id)
+                            }.firstOrNull()
                     }
                     if (alarm == null) {
-                        call.respond(
-                            CreateResponseJSON(true)
-                        )
+                        val info = transaction(database) { WebEinsatzTable.slice(WebEinsatzTable.id, WebEinsatzTable.stichwort, WebEinsatzTable.strasse, WebEinsatzTable.hausnr, WebEinsatzTable.plz, WebEinsatzTable.ort, WebEinsatzTable.bemerkungen).selectAll()
+                            .having { WebEinsatzTable.id eq WebEinsatzTable.id.max() }.firstOrNull()
+                        }
+                        if (info != null) {
+                            call.respond(
+                                AlarmResponseJSON(true, info.get(WebEinsatzTable.stichwort), info.get(WebEinsatzTable.strasse), info.get(WebEinsatzTable.hausnr), info.get(WebEinsatzTable.plz), info.get(WebEinsatzTable.ort), info.get(WebEinsatzTable.bemerkungen))
+                            )
+                        }
                     } else {
                         call.respond(
-                            CreateResponseJSON(false)
+                            AlarmResponseJSON(false, null,null,null,null,null,null)
                         )
                     }
                 }
+            }
+            post("einsatzResponse"){
+                val alarmResponse = call.receive(ReponseJSON::class)
+                val user = transaction(database) {
+                    WebUserDAO.find { WebUserTable.username like alarmResponse.username }.firstOrNull()
+                }
+                if (user != null){
+                    transaction(database) {
+                        val einsatz = EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max()}.firstOrNull()
+                        EinsatzTeilnahmeDAO.new {
+                            if (einsatz != null) {
+                                EID = einsatz.id
+                                MID = user.id
+                                teilgenommen = alarmResponse.response
+                            }
+                        }
+
+                    }
+                    call.respond(
+                        CreateResponseJSON(true )
+                    )
+                } else {
+                    call.respond(
+                        CreateResponseJSON(false)
+                    )
+                }
+
             }
 
             authenticate("Feuerwehr-Login") {
@@ -311,32 +342,6 @@ class NotificationServer constructor(
                 get("sessionInfo") {
                     val session = call.sessions.get<WebUserSession>()
                     call.respond(session ?: EmptyJSON)
-                }
-                post("einsatzResponse"){
-                    val alarmResponse = call.receive(AlarmReponseJSON::class)
-                    val user = transaction(database) {
-                        WebUserDAO.find { WebUserTable.username like alarmResponse.username }.firstOrNull()
-                    }
-                    if (user != null){
-                        transaction(database) {
-                            val einsatz = EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max()}.firstOrNull()
-                            EinsatzTeilnahmeDAO.new {
-                                if (einsatz != null) {
-                                    EID = einsatz.id
-                                    MID = user.id
-                                }
-                            }
-
-                        }
-                        call.respond(
-                            CreateResponseJSON(true )
-                        )
-                    } else {
-                        call.respond(
-                            CreateResponseJSON(false)
-                        )
-                    }
-
                 }
                 post("create") {
                     //delay(Duration.ofSeconds(3))
