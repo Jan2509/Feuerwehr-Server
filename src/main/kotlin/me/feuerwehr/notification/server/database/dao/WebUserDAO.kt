@@ -15,7 +15,7 @@ class WebUserDAO(id: EntityID<Int>) : IntEntity(id) {
         private fun hashPassword(password: String, salt: UUID) =
             Hashing.sha512().hashString(password + salt, StandardCharsets.UTF_8).asBytes()
     }
-
+    var UserID by WebUserTable.id
     var username by WebUserTable.username
     private var passwordHash by WebUserTable.password
     private var salt by WebUserTable.salt

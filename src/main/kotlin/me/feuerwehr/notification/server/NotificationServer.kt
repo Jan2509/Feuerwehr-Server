@@ -52,9 +52,11 @@ import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.awt.List
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -289,21 +291,27 @@ class NotificationServer constructor(
                 }
                 post("einsatzAbfrage"){
                     val alarmRequest = call.receive(AlarmRequestingJSON::class)
-
-                    var alarm : EinsatzTeilnahmeDAO? = null
+                    var voralarm :Boolean = false
+                    var alarm :Boolean = false
                     val user = transaction(database) {
                         WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
                     }
-                    val einsatzdata = WebEinsatzTable.id.max()
-                    if (user != null) {
-                         alarm = EinsatzTeilnahmeDAO.find { user.id eq EinsatzTeilnahmeTable.MID  and einsatzdata eq EinsatzTeilnahmeTable.EID }.firstOrNull()
+                    if (user != null){
+                        voralarm = EinsatzTeilnahmeTable.MID.equals(user.UserID)
+                        transaction(database) {
+                            EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id.max() }.forEach {
+                                alarm = !voralarm
+                            }
+                        }
                     }
-                    if ( alarm == null) {
+                    if (alarm) {
                         call.respond(
                             CreateResponseJSON(true )
                         )
                     } else {
-                        CreateResponseJSON(false)
+                        call.respond(
+                            CreateResponseJSON(false)
+                        )
                     }
 
                 }
@@ -368,6 +376,9 @@ class NotificationServer constructor(
 
         }
     }
+    private fun Columntoint(column: Column<EntityID<Int>>) : Int {
+        return column.toString().toInt()
+    }
 
     private fun initConfig(): Konf = ConfigWrapper(Konf {
         listOf(
@@ -428,18 +439,6 @@ class NotificationServer constructor(
         password = config[DatabaseSpec.dataPass]
     )
 
-}
-
-private infix fun Any.eq(eid: Column<Int>): Op<Boolean> {
-    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-}
-
-private infix fun Any.and(einsatzdata: ExpressionWithColumnType<EntityID<Int>?>): Any {
-    TODO()
-}
-
-private infix fun <T : Comparable<T>> EntityID<T>.eq(mid: Column<T>): Any {
-    TODO()
 }
 
 //object ServerSpec : ConfigSpec("") {
