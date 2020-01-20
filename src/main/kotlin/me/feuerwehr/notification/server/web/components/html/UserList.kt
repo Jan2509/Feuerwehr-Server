@@ -25,6 +25,10 @@ object UserList : Template<DIV> {
                     tr {
                         th { +"ID" }
                         th { +"Name" }
+                        th { +"Vorname" }
+                        th { +"Tel" }
+                        th { +"Geburtsdatum" }
+                        th { +"Eintrittsdatum" }
                     }
                 }
                 tbody {
@@ -37,6 +41,10 @@ object UserList : Template<DIV> {
                             tr {
                                 td { +user.id.toString() }
                                 td { +user.username }
+                                td { +user.vorname }
+                                td { +user.tel }
+                                td { +user.geb.toString() }
+                                td { +user.ein.toString() }
                             }
                             it++
                         }

@@ -59,6 +59,9 @@ import org.slf4j.LoggerFactory
 import java.awt.List
 import java.io.File
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.Month
 import java.util.*
 
 
@@ -242,8 +245,103 @@ class NotificationServer constructor(
         routing {
             route("api") {
                 apiInternal(database)
+                apiApp(database)
             }
         }
+    }
+    private fun Route.apiApp(database: Database) {
+        route("app") {
+            post("abfrage"){
+                val alarmRequest = call.receive(AlarmRequestingJSON::class)
+                val user = transaction(database) {
+                    WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
+                }
+                if (user != null) {
+                    val voralarm = transaction(database) { WebEinsatzTable.slice(WebEinsatzTable.id).selectAll().firstOrNull()
+                    }
+                    logger.info(voralarm.toString())
+                    if (voralarm != null ) {
+                        val alarm = transaction(database) {
+                            EinsatzTeilnahmeTable.join(
+                                WebEinsatzTable,
+                                joinType = JoinType.INNER,
+                                additionalConstraint = { EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id })
+                                .slice(EinsatzTeilnahmeTable.EID, EinsatzTeilnahmeTable.MID).selectAll()
+                                .having {
+                                    (EinsatzTeilnahmeTable.EID eq (WebEinsatzTable.id.max())) and (EinsatzTeilnahmeTable.MID eq user.id)
+                                }.firstOrNull()
+                        }
+                        logger.info(alarm.toString())
+                        if (alarm == null) {
+                            val info = transaction(database) {
+                                WebEinsatzTable.slice(
+                                    WebEinsatzTable.id,
+                                    WebEinsatzTable.stichwort,
+                                    WebEinsatzTable.strasse,
+                                    WebEinsatzTable.hausnr,
+                                    WebEinsatzTable.plz,
+                                    WebEinsatzTable.ort,
+                                    WebEinsatzTable.bemerkungen
+                                ).selectAll()
+                                    .having { WebEinsatzTable.id eq WebEinsatzTable.id.max() }.firstOrNull()
+                            }
+                            logger.info(info.toString())
+                            if (info != null) {
+                                call.respond(
+                                    AlarmResponseJSON(
+                                        true,
+                                        info.get(WebEinsatzTable.stichwort),
+                                        info.get(WebEinsatzTable.strasse),
+                                        info.get(WebEinsatzTable.hausnr),
+                                        info.get(WebEinsatzTable.plz),
+                                        info.get(WebEinsatzTable.ort),
+                                        info.get(WebEinsatzTable.bemerkungen)
+                                    )
+                                )
+                            }
+                        } else {
+                            call.respond(
+                                AlarmResponseJSON(false, null, null, null, null, null, null)
+                            )
+                        }
+                    } else if (voralarm == null ) {
+                        call.respond(
+                            AlarmResponseJSON(false, null, null, null, null, null, null)
+                        )
+                    }
+                }
+            }
+            post("einsatzResponse"){
+                val alarmResponse = call.receive(ReponseJSON::class)
+                val user = transaction(database) {
+                    WebUserDAO.find { WebUserTable.username like alarmResponse.username }.firstOrNull()
+                }
+                if (user != null){
+                    transaction(database) {
+                        val einsatz = EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max()}.firstOrNull()
+                        EinsatzTeilnahmeDAO.new {
+                            if (einsatz != null) {
+                                EID = einsatz.id
+                                MID = user.id
+                                teilgenommen = alarmResponse.response
+                            }
+                        }
+
+                    }
+                    call.respond(
+                        CreateResponseJSON(true )
+                    )
+                } else {
+                    call.respond(
+                        CreateResponseJSON(false)
+                    )
+                }
+
+            }
+        }
+
+
+
     }
 
     private fun Route.apiInternal(database: Database) {
@@ -277,62 +375,6 @@ class NotificationServer constructor(
                     call.respond(HttpStatusCode.InternalServerError)
                 }
             }
-            post("einsatzAbfrage"){
-                val alarmRequest = call.receive(AlarmRequestingJSON::class)
-                val user = transaction(database) {
-                    WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
-                }
-                if (user != null) {
-                    val alarm = transaction(database) {
-                        EinsatzTeilnahmeTable.join(WebEinsatzTable, joinType = JoinType.INNER, additionalConstraint = {EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id}).slice(EinsatzTeilnahmeTable.EID, EinsatzTeilnahmeTable.MID).selectAll()
-                            .having {
-                                (EinsatzTeilnahmeTable.EID eq (WebEinsatzTable.id.max())) and (EinsatzTeilnahmeTable.MID eq user.id)
-                            }.firstOrNull()
-                    }
-                    if (alarm == null) {
-                        val info = transaction(database) { WebEinsatzTable.slice(WebEinsatzTable.id, WebEinsatzTable.stichwort, WebEinsatzTable.strasse, WebEinsatzTable.hausnr, WebEinsatzTable.plz, WebEinsatzTable.ort, WebEinsatzTable.bemerkungen).selectAll()
-                            .having { WebEinsatzTable.id eq WebEinsatzTable.id.max() }.firstOrNull()
-                        }
-                        if (info != null) {
-                            call.respond(
-                                AlarmResponseJSON(true, info.get(WebEinsatzTable.stichwort), info.get(WebEinsatzTable.strasse), info.get(WebEinsatzTable.hausnr), info.get(WebEinsatzTable.plz), info.get(WebEinsatzTable.ort), info.get(WebEinsatzTable.bemerkungen))
-                            )
-                        }
-                    } else {
-                        call.respond(
-                            AlarmResponseJSON(false, null,null,null,null,null,null)
-                        )
-                    }
-                }
-            }
-            post("einsatzResponse"){
-                val alarmResponse = call.receive(ReponseJSON::class)
-                val user = transaction(database) {
-                    WebUserDAO.find { WebUserTable.username like alarmResponse.username }.firstOrNull()
-                }
-                if (user != null){
-                    transaction(database) {
-                        val einsatz = EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max()}.firstOrNull()
-                        EinsatzTeilnahmeDAO.new {
-                            if (einsatz != null) {
-                                EID = einsatz.id
-                                MID = user.id
-                                teilgenommen = alarmResponse.response
-                            }
-                        }
-
-                    }
-                    call.respond(
-                        CreateResponseJSON(true )
-                    )
-                } else {
-                    call.respond(
-                        CreateResponseJSON(false)
-                    )
-                }
-
-            }
-
             authenticate("Feuerwehr-Login") {
                 get("logout") {
 
@@ -345,16 +387,22 @@ class NotificationServer constructor(
                 }
                 post("create") {
                     //delay(Duration.ofSeconds(3))
-                    runCatching {
+                    //runCatching {
                         val createRequest = call.receive(CreateRequestingJSON::class)
                         val userNotExists : Boolean = transaction(database) {
                             WebUserDAO.find { WebUserTable.username like createRequest.username }.empty()
                         }
                         if (userNotExists) {
+                            val einnew : String = (SimpleDateFormat("dd.MM.yyyy").format(createRequest.ein)).toString()
+                            val gebnew: String = (SimpleDateFormat("dd.MM.yyyy").format(createRequest.geb)).toString()
                             transaction(database) {
                                 WebUserDAO.new {
                                     username = createRequest.username
+                                    vorname = createRequest.vorname
                                     setPassword(createRequest.password)
+                                    tel = createRequest.tel
+                                    geb = gebnew
+                                    ein = einnew
                                 }
                             }
                             call.respond(
@@ -369,9 +417,9 @@ class NotificationServer constructor(
                                 )
                             )
                         }
-                    }.getOrElse {
-                        call.respond(HttpStatusCode.InternalServerError)
-                    }
+                    //}.getOrElse {
+                    //    call.respond(HttpStatusCode.InternalServerError)
+                    //}
                 }
                 post("createEinsatz") {
                     //delay(Duration.ofSeconds(3))
@@ -441,9 +489,15 @@ class NotificationServer constructor(
         if (!WebUserTable.selectAll().any()) {
             val password = RandomStringUtils.randomAlphabetic(8)
             val user = "admin"
+            val date : String = alarmdate()
             WebUserDAO.new {
                 username = user
+                vorname = ""
                 setPassword(password)
+                tel = " "
+                geb = date
+                ein = date
+
             }
             logger.info("Das ist dein $user Passwort: $password")
         }

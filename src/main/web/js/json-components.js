@@ -7,4 +7,17 @@ class RequestJson {
 }
 
 export {RequestJson}
+class CreateRequestJson {
+
+    constructor(username, vorname, password, tel, geb, ein) {
+        this.username = username;
+        this.vorname = vorname;
+        this.password = password;
+        this.tel = tel;
+        this.geb = geb;
+        this.ein = ein;
+    }
+}
+
+export {CreateRequestJson}
 
