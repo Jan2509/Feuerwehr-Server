@@ -258,8 +258,10 @@ class NotificationServer constructor(
                 }
                 if (user != null) {
                     val voralarm = transaction(database) {
-                        WebEinsatzTable.slice(WebEinsatzTable.id).selectAll().firstOrNull()
+                        WebEinsatzDAO.find {  }
+                        WebEinsatzTable.slice(WebEinsatzTable.id, WebEinsatzTable.id.max()).selectAll().having { WebEinsatzTable.id eq WebEinsatzTable.id.max() }.firstOrNull()
                     }
+                    logger.info(voralarm.toString())
                     if (voralarm != null) {
                         val alarm = transaction(database) {
                             EinsatzTeilnahmeTable.join(
