@@ -222,7 +222,7 @@ class NotificationServer constructor(
         }
     }
 
-    private fun Application.loginPage() {
+    fun Application.loginPage() {
         routing {
             get("/login") {
                 if (call.authentication.principal != null) {
@@ -241,7 +241,7 @@ class NotificationServer constructor(
         }
     }
 
-    private fun Application.api(database: Database) {
+    fun Application.api(database: Database) {
         routing {
             route("api") {
                 apiInternal(database)
@@ -249,18 +249,18 @@ class NotificationServer constructor(
             }
         }
     }
-    private fun Route.apiApp(database: Database) {
+    fun Route.apiApp(database: Database) {
         route("app") {
-            post("abfrage"){
+            post("abfrage") {
                 val alarmRequest = call.receive(AlarmRequestingJSON::class)
                 val user = transaction(database) {
                     WebUserDAO.find { WebUserTable.username like alarmRequest.name }.firstOrNull()
                 }
                 if (user != null) {
-                    val voralarm = transaction(database) { WebEinsatzTable.slice(WebEinsatzTable.id).selectAll().firstOrNull()
+                    val voralarm = transaction(database) {
+                        WebEinsatzTable.slice(WebEinsatzTable.id).selectAll().firstOrNull()
                     }
-                    logger.info(voralarm.toString())
-                    if (voralarm != null ) {
+                    if (voralarm != null) {
                         val alarm = transaction(database) {
                             EinsatzTeilnahmeTable.join(
                                 WebEinsatzTable,
@@ -271,7 +271,6 @@ class NotificationServer constructor(
                                     (EinsatzTeilnahmeTable.EID eq (WebEinsatzTable.id.max())) and (EinsatzTeilnahmeTable.MID eq user.id)
                                 }.firstOrNull()
                         }
-                        logger.info(alarm.toString())
                         if (alarm == null) {
                             val info = transaction(database) {
                                 WebEinsatzTable.slice(
@@ -285,7 +284,6 @@ class NotificationServer constructor(
                                 ).selectAll()
                                     .having { WebEinsatzTable.id eq WebEinsatzTable.id.max() }.firstOrNull()
                             }
-                            logger.info(info.toString())
                             if (info != null) {
                                 call.respond(
                                     AlarmResponseJSON(
@@ -304,18 +302,63 @@ class NotificationServer constructor(
                                 AlarmResponseJSON(false, null, null, null, null, null, null)
                             )
                         }
-                    } else if (voralarm == null ) {
+                    } else if (voralarm == null) {
                         call.respond(
                             AlarmResponseJSON(false, null, null, null, null, null, null)
                         )
                     }
                 }
             }
-            post("einsatzResponse"){
+            post("response") {
                 val alarmResponse = call.receive(ReponseJSON::class)
                 val user = transaction(database) {
                     WebUserDAO.find { WebUserTable.username like alarmResponse.username }.firstOrNull()
                 }
+                if (user != null) {
+                    val voralarm = transaction(database) {
+                        WebEinsatzTable.slice(WebEinsatzTable.id).selectAll().firstOrNull()
+                    }
+                    if (voralarm != null) {
+                        val alarm = transaction(database) {
+                            EinsatzTeilnahmeTable.join(
+                                WebEinsatzTable,
+                                joinType = JoinType.INNER,
+                                additionalConstraint = { EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id })
+                                .slice(EinsatzTeilnahmeTable.EID, EinsatzTeilnahmeTable.MID).selectAll()
+                                .having {
+                                    (EinsatzTeilnahmeTable.EID eq (WebEinsatzTable.id.max())) and (EinsatzTeilnahmeTable.MID eq user.id)
+                                }.firstOrNull()
+                        }
+                        logger.info(alarm.toString())
+                        if (alarm == null) {
+                            transaction(database) {
+                                val einsatz =
+                                    EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max() }
+                                        .firstOrNull()
+                                EinsatzTeilnahmeDAO.new {
+                                    if (einsatz != null) {
+                                        EID = einsatz.id
+                                        MID = user.id
+                                        teilgenommen = alarmResponse.success
+                                        logger.info("Response")
+                                    }
+                                }
+                            }
+
+                            call.respond(
+                                CreateResponseJSON(true)
+                            )
+                        }
+                    }
+                }
+                call.respond(
+                    CreateResponseJSON(false)
+                )
+            }
+        }
+    }
+
+                /* val alarmResponse = call.receive(ReponseJSON::class)
                 if (user != null){
                     transaction(database) {
                         val einsatz = EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max()}.firstOrNull()
@@ -338,13 +381,9 @@ class NotificationServer constructor(
                 }
 
             }
-        }
+        }*/
 
-
-
-    }
-
-    private fun Route.apiInternal(database: Database) {
+    fun Route.apiInternal(database: Database) {
         route("internal") {
             post("login") {
                 //delay(Duration.ofSeconds(3))
