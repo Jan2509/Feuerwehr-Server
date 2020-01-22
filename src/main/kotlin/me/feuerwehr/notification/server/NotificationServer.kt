@@ -258,10 +258,9 @@ class NotificationServer constructor(
                 }
                 if (user != null) {
                     val voralarm = transaction(database) {
-                        WebEinsatzDAO.find {  }
-                        WebEinsatzTable.slice(WebEinsatzTable.id, WebEinsatzTable.id.max()).selectAll().having { WebEinsatzTable.id eq WebEinsatzTable.id.max() }.firstOrNull()
+                        WebEinsatzTable.slice(WebEinsatzTable.id).selectAll()
+                            .orderBy(WebEinsatzTable.id, SortOrder.DESC).firstOrNull()
                     }
-                    logger.info(voralarm.toString())
                     if (voralarm != null) {
                         val alarm = transaction(database) {
                             EinsatzTeilnahmeTable.join(
@@ -270,7 +269,7 @@ class NotificationServer constructor(
                                 additionalConstraint = { EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id })
                                 .slice(EinsatzTeilnahmeTable.EID, EinsatzTeilnahmeTable.MID).selectAll()
                                 .having {
-                                    (EinsatzTeilnahmeTable.EID eq (WebEinsatzTable.id.max())) and (EinsatzTeilnahmeTable.MID eq user.id)
+                                    (EinsatzTeilnahmeTable.EID eq voralarm[WebEinsatzTable.id]) and (EinsatzTeilnahmeTable.MID eq user.id)
                                 }.firstOrNull()
                         }
                         if (alarm == null) {
@@ -284,18 +283,18 @@ class NotificationServer constructor(
                                     WebEinsatzTable.ort,
                                     WebEinsatzTable.bemerkungen
                                 ).selectAll()
-                                    .having { WebEinsatzTable.id eq WebEinsatzTable.id.max() }.firstOrNull()
+                                    .having { WebEinsatzTable.id eq voralarm[WebEinsatzTable.id] }.firstOrNull()
                             }
                             if (info != null) {
                                 call.respond(
                                     AlarmResponseJSON(
                                         true,
-                                        info.get(WebEinsatzTable.stichwort),
-                                        info.get(WebEinsatzTable.strasse),
-                                        info.get(WebEinsatzTable.hausnr),
-                                        info.get(WebEinsatzTable.plz),
-                                        info.get(WebEinsatzTable.ort),
-                                        info.get(WebEinsatzTable.bemerkungen)
+                                        info[WebEinsatzTable.stichwort],
+                                        info[WebEinsatzTable.strasse],
+                                        info[WebEinsatzTable.hausnr],
+                                        info[WebEinsatzTable.plz],
+                                        info[WebEinsatzTable.ort],
+                                        info[WebEinsatzTable.bemerkungen]
                                     )
                                 )
                             }
@@ -318,7 +317,8 @@ class NotificationServer constructor(
                 }
                 if (user != null) {
                     val voralarm = transaction(database) {
-                        WebEinsatzTable.slice(WebEinsatzTable.id).selectAll().firstOrNull()
+                        WebEinsatzTable.slice(WebEinsatzTable.id).selectAll()
+                            .orderBy(WebEinsatzTable.id, SortOrder.DESC).firstOrNull()
                     }
                     if (voralarm != null) {
                         val alarm = transaction(database) {
@@ -328,34 +328,47 @@ class NotificationServer constructor(
                                 additionalConstraint = { EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id })
                                 .slice(EinsatzTeilnahmeTable.EID, EinsatzTeilnahmeTable.MID).selectAll()
                                 .having {
-                                    (EinsatzTeilnahmeTable.EID eq (WebEinsatzTable.id.max())) and (EinsatzTeilnahmeTable.MID eq user.id)
+                                    (EinsatzTeilnahmeTable.EID eq voralarm[WebEinsatzTable.id]) and (EinsatzTeilnahmeTable.MID eq user.id)
                                 }.firstOrNull()
                         }
-                        logger.info(alarm.toString())
                         if (alarm == null) {
-                            transaction(database) {
-                                val einsatz =
-                                    EinsatzTeilnahmeDAO.find { EinsatzTeilnahmeTable.id eq WebEinsatzTable.id.max() }
-                                        .firstOrNull()
-                                EinsatzTeilnahmeDAO.new {
-                                    if (einsatz != null) {
-                                        EID = einsatz.id
+                            val info = transaction(database) {
+                                WebEinsatzTable.slice(
+                                    WebEinsatzTable.id,
+                                    WebEinsatzTable.stichwort,
+                                    WebEinsatzTable.strasse,
+                                    WebEinsatzTable.hausnr,
+                                    WebEinsatzTable.plz,
+                                    WebEinsatzTable.ort,
+                                    WebEinsatzTable.bemerkungen
+                                ).selectAll()
+                                    .having { WebEinsatzTable.id eq voralarm[WebEinsatzTable.id] }.firstOrNull()
+                            }
+                            if (info != null) {
+                                transaction(database) {
+                                    EinsatzTeilnahmeDAO.new {
+                                        EID = voralarm[WebEinsatzTable.id]
                                         MID = user.id
                                         teilgenommen = alarmResponse.success
-                                        logger.info("Response")
                                     }
                                 }
+                                call.respond(
+                                    CreateResponseJSON(
+                                        true
+                                    )
+                                )
                             }
-
+                        } else {
                             call.respond(
-                                CreateResponseJSON(true)
+                                CreateResponseJSON(false)
                             )
                         }
+                    } else if (voralarm == null) {
+                        call.respond(
+                            CreateResponseJSON(false)
+                        )
                     }
                 }
-                call.respond(
-                    CreateResponseJSON(false)
-                )
             }
         }
     }
