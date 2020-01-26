@@ -20,4 +20,13 @@ class CreateRequestJson {
 }
 
 export {CreateRequestJson}
+class addJson {
+
+    constructor(username, bezeichnung) {
+        this.username = username;
+        this.bezeichnung = bezeichnung
+    }
+}
+
+export {addJson}
 

@@ -4,6 +4,7 @@ import com.google.common.annotations.Beta
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import com.uchuhimo.konf.ConfigSpec
+import freemarker.ext.servlet.FreemarkerServlet
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
 import io.ktor.application.call
@@ -36,12 +37,8 @@ import io.ktor.util.pipeline.PipelineContext
 import kotlinx.html.body
 import kotlinx.html.head
 import kotlinx.html.unsafe
-import me.feuerwehr.notification.server.database.dao.EinsatzTeilnahmeDAO
-import me.feuerwehr.notification.server.database.dao.WebEinsatzDAO
-import me.feuerwehr.notification.server.database.dao.WebUserDAO
-import me.feuerwehr.notification.server.database.table.EinsatzTeilnahmeTable
-import me.feuerwehr.notification.server.database.table.WebEinsatzTable
-import me.feuerwehr.notification.server.database.table.WebUserTable
+import me.feuerwehr.notification.server.database.dao.*
+import me.feuerwehr.notification.server.database.table.*
 import me.feuerwehr.notification.server.web.components.html.*
 import me.feuerwehr.notification.server.web.components.json.EmptyJSON
 import me.feuerwehr.notification.server.web.components.json.MessageJSON
@@ -50,18 +47,12 @@ import me.feuerwehr.notification.server.web.user.WebUserSession
 import org.apache.commons.lang3.RandomStringUtils
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
-import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.awt.List
 import java.io.File
 import java.text.SimpleDateFormat
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.Month
 import java.util.*
 
 
@@ -96,21 +87,22 @@ class NotificationServer constructor(
         }
         val webHost = config[ConnectionSpec.host]
         val webPort = config[ConnectionSpec.port]
-        val webconfig = applicationEngineEnvironment {
+        val webConfig = applicationEngineEnvironment {
             connector {
                 this.host = webHost
                 this.port = webPort
             }
             module {
-                main(sessionStorage, database)
-                loginPage()
-                mainPages()
-                api(database)
+                this.main(sessionStorage, database)
+                this.loginPage()
+                this.mainPages()
+                this.api(database)
             }
         }
-        val server = embeddedServer(Netty, webconfig)
+        val server = embeddedServer(Netty,  webConfig)
         server.start(wait = true)
     }
+
     @KtorExperimentalAPI
     fun Application.main(sessionStorage: SessionStorage, database: Database) {
         routing {
@@ -171,7 +163,10 @@ class NotificationServer constructor(
                 validate { call -> createUserPrincipalCache(database)[call] }
             }
 
-        }
+        }/*
+        install(Freemarker) {
+            templateLoader = ClassTemplateLoader(this::class.java.classLoader, "templates")
+        }*/
     }
 
     private fun Application.mainPages() {
@@ -189,7 +184,6 @@ class NotificationServer constructor(
                 }
                 get("/User") {
                     call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
-
                         content{
                             insert(UserContainer) {}
                             insert(UserList) {}
@@ -203,6 +197,14 @@ class NotificationServer constructor(
                             insert(EinsatzList) {
 
                             }
+                        }
+                    }
+                }
+                get("/Ausbildung") {
+                    call.respondHtmlTemplate(OuterPage(), HttpStatusCode.Accepted) {
+                        content{
+                            insert(AusbildungsContainer) {}
+                            insert(AusbildungsList) {}
                         }
                     }
                 }
@@ -303,7 +305,7 @@ class NotificationServer constructor(
                                 AlarmResponseJSON(false, null, null, null, null, null, null)
                             )
                         }
-                    } else if (voralarm == null) {
+                    } else {
                         call.respond(
                             AlarmResponseJSON(false, null, null, null, null, null, null)
                         )
@@ -328,19 +330,15 @@ class NotificationServer constructor(
                                 additionalConstraint = { EinsatzTeilnahmeTable.EID eq WebEinsatzTable.id })
                                 .slice(EinsatzTeilnahmeTable.EID, EinsatzTeilnahmeTable.MID).selectAll()
                                 .having {
-                                    (EinsatzTeilnahmeTable.EID eq voralarm[WebEinsatzTable.id]) and (EinsatzTeilnahmeTable.MID eq user.id)
+                                    ((EinsatzTeilnahmeTable.EID eq voralarm[WebEinsatzTable.id])
+                                    and
+                                    (EinsatzTeilnahmeTable.MID eq user.id))
                                 }.firstOrNull()
                         }
                         if (alarm == null) {
                             val info = transaction(database) {
                                 WebEinsatzTable.slice(
-                                    WebEinsatzTable.id,
-                                    WebEinsatzTable.stichwort,
-                                    WebEinsatzTable.strasse,
-                                    WebEinsatzTable.hausnr,
-                                    WebEinsatzTable.plz,
-                                    WebEinsatzTable.ort,
-                                    WebEinsatzTable.bemerkungen
+                                    WebEinsatzTable.id
                                 ).selectAll()
                                     .having { WebEinsatzTable.id eq voralarm[WebEinsatzTable.id] }.firstOrNull()
                             }
@@ -400,6 +398,16 @@ class NotificationServer constructor(
 
     fun Route.apiInternal(database: Database) {
         route("internal") {
+            get("alarmdisplay") {
+                call.respondHtml {
+                    head {
+                        insert(DefaultPageHead) {}
+                    }
+                    body {
+                        insert(AlarmResponse) {}
+                    }
+                }
+            }
             post("login") {
                 //delay(Duration.ofSeconds(3))
                 runCatching {
@@ -438,6 +446,42 @@ class NotificationServer constructor(
                 get("sessionInfo") {
                     val session = call.sessions.get<WebUserSession>()
                     call.respond(session ?: EmptyJSON)
+                }
+                post("add") {
+                    //delay(Duration.ofSeconds(3))
+                    //runCatching {
+                    val addRequest = call.receive(addRequestingJSON::class)
+                    val user = transaction(database) {WebUserDAO.find { WebUserTable.username like addRequest.username }.firstOrNull() }
+                    val ausbildung = transaction(database) { WebAusbildungsDAO.find { WebAusbildungsTable.bezeichnung like addRequest.bezeichnung}.firstOrNull()}
+                    if (ausbildung != null && user != null) {
+                        val ausNotExists: Boolean = transaction(database) {
+                            AusgebildetDAO.find { AusgebildetTable.AID eq ausbildung.id and (AusgebildetTable.MID eq user.id) }.empty()
+                        }
+                        if (ausNotExists) {
+                            if (user != null) {
+                                transaction(database) {
+                                    AusgebildetDAO.new {
+                                        MID = user.id
+                                        AID = ausbildung.id
+                                    }
+                                }
+                            }
+                            call.respond(
+                                CreateResponseJSON(
+                                    true
+                                )
+                            )
+                        } else {
+                            call.respond(
+                                CreateResponseJSON(
+                                    false
+                                )
+                            )
+                        }
+                        //}.getOrElse {
+                        //    call.respond(HttpStatusCode.InternalServerError)
+                        //}
+                    }
                 }
                 post("create") {
                     //delay(Duration.ofSeconds(3))
@@ -540,6 +584,8 @@ class NotificationServer constructor(
         SchemaUtils.createMissingTablesAndColumns(WebUserTable)
         SchemaUtils.createMissingTablesAndColumns(WebEinsatzTable)
         SchemaUtils.createMissingTablesAndColumns(EinsatzTeilnahmeTable)
+        SchemaUtils.createMissingTablesAndColumns(WebAusbildungsTable)
+        SchemaUtils.createMissingTablesAndColumns(AusgebildetTable)
         if (!WebUserTable.selectAll().any()) {
             val password = RandomStringUtils.randomAlphabetic(8)
             val user = "admin"

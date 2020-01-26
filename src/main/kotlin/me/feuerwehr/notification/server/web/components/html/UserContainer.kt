@@ -8,7 +8,7 @@ object UserContainer : Template<DIV> {
             form {
                 id = "create-form"
                 div("field") {
-                    label("label") { +"NachNnme" }
+                    label("label") { +"Nachname" }
                     div("control") {
                         input(type = InputType.text, classes = "input") {
                             id = "create-username-input"

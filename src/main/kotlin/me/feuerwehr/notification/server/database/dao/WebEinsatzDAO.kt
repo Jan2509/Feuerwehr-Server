@@ -10,7 +10,6 @@ class WebEinsatzDAO(id: EntityID<Int>) : IntEntity(id) {
     companion object Static : IntEntityClass<WebEinsatzDAO>(
         WebEinsatzTable
     )
-    var einsatzID by WebEinsatzTable.id
     var stichwort by WebEinsatzTable.stichwort
     var strasse by WebEinsatzTable.strasse
     var hausnr by WebEinsatzTable.hausnr

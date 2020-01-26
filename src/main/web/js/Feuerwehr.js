@@ -12,6 +12,7 @@ import {handleLogout} from "./Feuerwehr-logout";
 import {initOuterPage} from "./outer-page";
 import {startCreate} from "./Feuerwehr-User";
 import {einsatzCreate} from "./Feuerwehr-Einsatz";
+import {addCreate} from "./Feuerwehr-add";
 
 window.loginPage = function () {
     startLogin()
@@ -27,4 +28,7 @@ window.createPage = function () {
 };
 window.createEinsatzPage = function () {
     einsatzCreate()
+};
+window.addPage = function () {
+    addCreate()
 };

@@ -57,6 +57,9 @@ class OuterPage() : Template<HTML> {
                     a("/User", classes = "navbar-item") {
                         +"User"
                     }
+                    a("/Ausbildung", classes = "navbar-item") {
+                        +"Ausbildungen"
+                    }
                 }
                 div("navbar-end") {
 
