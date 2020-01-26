@@ -401,7 +401,7 @@ class NotificationServer constructor(
             get("alarmdisplay") {
                 call.respondHtml {
                     head {
-                        insert(DefaultPageHead) {}
+                        insert(DisplayPageHead) {}
                     }
                     body {
                         insert(AlarmResponse) {}
